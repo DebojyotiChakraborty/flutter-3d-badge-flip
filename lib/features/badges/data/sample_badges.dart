@@ -47,9 +47,8 @@ final List<AwardBadge> sampleBadges = [
     glbAssetPath: 'assets/badges/award-4.glb',
     category: BadgeCategory.milestones,
     accentColor: BadgeColors.green,
-    isEarned: false,
-    progress: 0.08,
-    progressLabel: '8 of 100',
+    isEarned: true,
+    dateEarned: DateTime(2026, 2, 10),
   ),
   AwardBadge(
     id: '5',
@@ -59,8 +58,7 @@ final List<AwardBadge> sampleBadges = [
     glbAssetPath: 'assets/badges/award-5.glb',
     category: BadgeCategory.closeYourRings,
     accentColor: BadgeColors.orange,
-    isEarned: false,
-    progress: 0.003,
-    progressLabel: '1 of 360 kcal',
+    isEarned: true,
+    dateEarned: DateTime(2026, 3, 1),
   ),
 ];

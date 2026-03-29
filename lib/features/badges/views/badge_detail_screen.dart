@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:heroine/heroine.dart';
 
 import '../../../core/constants/animation_constants.dart';
-import '../../../core/theme/badge_colors.dart';
 import '../../../core/utils/heroine_helpers.dart';
 import '../viewmodels/badge_grid_viewmodel.dart';
 import 'widgets/badge_3d_viewer.dart';
@@ -133,25 +132,9 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
                           AnimatedOpacity(
                             opacity: _glbLoaded ? 0.0 : 1.0,
                             duration: AnimationConstants.crossfadeDuration,
-                            child: Container(
-                              decoration: badge.isEarned
-                                  ? BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: BadgeColors.glowFor(
-                                              badge.accentColor),
-                                          blurRadius: 40,
-                                          spreadRadius: 10,
-                                        ),
-                                      ],
-                                    )
-                                  : null,
-                              child: BadgeThumbnail(
-                                accentColor: badge.accentColor,
-                                isEarned: badge.isEarned,
-                                size: badgeSize,
-                              ),
+                            child: BadgeThumbnail(
+                              accentColor: badge.accentColor,
+                              size: badgeSize,
                             ),
                           ),
                           // Actual 3D model (canvas-based, participates in flip)
@@ -159,8 +142,7 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
                             modelAssetPath: badge.modelAssetPath,
                             size: badgeSize,
                             onModelLoaded: _onGlbLoaded,
-                            autoRotate: badge.isEarned,
-                            enableTouch: badge.isEarned,
+                            enableTouch: true,
                           ),
                         ],
                       ),

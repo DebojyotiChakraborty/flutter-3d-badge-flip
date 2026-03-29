@@ -39,7 +39,8 @@ class BadgeInfoCard extends StatelessWidget {
           const SizedBox(height: 20),
 
           // Date earned or progress
-          if (badge.isEarned && badge.dateEarned != null) ...[
+          // Date earned
+          if (badge.dateEarned != null) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -64,37 +65,6 @@ class BadgeInfoCard extends StatelessWidget {
                 ],
               ),
             ),
-          ] else if (!badge.isEarned) ...[
-            // Locked indicator
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.lock_rounded,
-                    color: Color(0xFF8E8E93),
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    badge.progressLabel ?? 'Not yet earned',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            if (badge.progress != null) ...[
-              const SizedBox(height: 16),
-              _ProgressIndicator(
-                progress: badge.progress!,
-                color: badge.accentColor,
-              ),
-            ],
           ],
         ],
       ),
@@ -110,28 +80,3 @@ class BadgeInfoCard extends StatelessWidget {
   }
 }
 
-class _ProgressIndicator extends StatelessWidget {
-  const _ProgressIndicator({
-    required this.progress,
-    required this.color,
-  });
-
-  final double progress;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 200,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(
-          value: progress,
-          backgroundColor: Colors.white.withValues(alpha: 0.1),
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-          minHeight: 6,
-        ),
-      ),
-    );
-  }
-}

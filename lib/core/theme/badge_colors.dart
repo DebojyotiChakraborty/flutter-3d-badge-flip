@@ -22,9 +22,6 @@ class BadgeColors {
   /// Gold — Limited edition badges.
   static const gold = Color(0xFFFFD700);
 
-  /// Maps a color to its glow variant at 15% opacity for badge shadows.
-  static Color glowFor(Color accent) => accent.withValues(alpha: 0.15);
-
   /// Maps a color to a slightly lighter variant for gradient highlights.
   static Color highlightFor(Color accent) =>
       Color.lerp(accent, Colors.white, 0.3)!;

@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_scene/scene.dart';
@@ -16,15 +14,15 @@ class Badge3DViewer extends StatefulWidget {
     required this.modelAssetPath,
     required this.onModelLoaded,
     this.size = 250,
-    this.autoRotate = false,
-    this.enableTouch = true,
+    this.enableTouch = false,
   });
 
   /// Path to the .model file (converted from GLB via flutter_scene_importer).
   final String modelAssetPath;
   final VoidCallback onModelLoaded;
   final double size;
-  final bool autoRotate;
+
+  /// When true, the user can drag to rotate the badge along the Y axis.
   final bool enableTouch;
 
   @override
@@ -37,20 +35,17 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   Node? _modelNode;
   bool _sceneReady = false;
   Ticker? _ticker;
-  double _elapsedSeconds = 0;
 
-  // Touch rotation state
+  // Touch rotation state (Y-axis only)
   double _rotationY = 0;
-  double _rotationX = 0;
   double _lastPanX = 0;
-  double _lastPanY = 0;
 
   @override
   void initState() {
     super.initState();
     _initScene();
-    // Only create a ticker if we need continuous updates (auto-rotate or touch)
-    if (widget.autoRotate || widget.enableTouch) {
+    // Create a ticker for continuous repaint when touch is enabled.
+    if (widget.enableTouch) {
       _ticker = createTicker(_onTick)..start();
     }
   }
@@ -88,7 +83,6 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   }
 
   void _onTick(Duration elapsed) {
-    _elapsedSeconds = elapsed.inMilliseconds / 1000.0;
     if (_sceneReady) {
       setState(() {}); // Trigger repaint
     }
@@ -109,19 +103,14 @@ class _Badge3DViewerState extends State<Badge3DViewer>
         onPanStart: widget.enableTouch
             ? (details) {
                 _lastPanX = details.localPosition.dx;
-                _lastPanY = details.localPosition.dy;
               }
             : null,
         onPanUpdate: widget.enableTouch
             ? (details) {
                 final dx = details.localPosition.dx - _lastPanX;
-                final dy = details.localPosition.dy - _lastPanY;
                 _lastPanX = details.localPosition.dx;
-                _lastPanY = details.localPosition.dy;
                 setState(() {
                   _rotationY += dx * 0.01;
-                  _rotationX += dy * 0.01;
-                  _rotationX = _rotationX.clamp(-pi / 4, pi / 4);
                 });
               }
             : null,
@@ -131,10 +120,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
                   painter: _ScenePainter(
                     scene: _scene!,
                     modelNode: _modelNode!,
-                    rotationY: widget.autoRotate
-                        ? _elapsedSeconds * 0.5 + _rotationY
-                        : _rotationY,
-                    rotationX: _rotationX,
+                    rotationY: _rotationY,
                   ),
                 ),
               )
@@ -148,21 +134,17 @@ class _ScenePainter extends CustomPainter {
   final Scene scene;
   final Node modelNode;
   final double rotationY;
-  final double rotationX;
 
   _ScenePainter({
     required this.scene,
     required this.modelNode,
     required this.rotationY,
-    required this.rotationX,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Update the node's transform for rotation.
-    modelNode.localTransform = vm.Matrix4.identity()
-      ..rotateY(rotationY)
-      ..rotateX(rotationX);
+    // Update the node's transform for Y-axis rotation only.
+    modelNode.localTransform = vm.Matrix4.identity()..rotateY(rotationY);
 
     // Camera positioned to frame the full badge model.
     // Badge models are ~40 units diameter with translations up to 54 units.

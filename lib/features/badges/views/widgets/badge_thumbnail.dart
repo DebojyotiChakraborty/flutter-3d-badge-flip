@@ -13,40 +13,20 @@ class BadgeThumbnail extends StatelessWidget {
     super.key,
     required this.accentColor,
     this.size = 100,
-    this.isEarned = true,
   });
 
   final Color accentColor;
   final double size;
-  final bool isEarned;
 
   @override
   Widget build(BuildContext context) {
-    Widget thumbnail = SizedBox(
+    return SizedBox(
       width: size,
       height: size,
       child: CustomPaint(
         painter: _BadgeThumbnailPainter(accentColor: accentColor),
       ),
     );
-
-    // Unearned badges get greyscale + reduced opacity.
-    if (!isEarned) {
-      thumbnail = ColorFiltered(
-        colorFilter: const ColorFilter.matrix(<double>[
-          0.2126, 0.7152, 0.0722, 0, 0, //
-          0.2126, 0.7152, 0.0722, 0, 0, //
-          0.2126, 0.7152, 0.0722, 0, 0, //
-          0, 0, 0, 1, 0, //
-        ]),
-        child: Opacity(
-          opacity: 0.4,
-          child: thumbnail,
-        ),
-      );
-    }
-
-    return thumbnail;
   }
 }
 

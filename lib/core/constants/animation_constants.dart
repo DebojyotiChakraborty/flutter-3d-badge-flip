@@ -5,10 +5,6 @@ abstract class AnimationConstants {
   /// Total flight duration for the heroine spring animation.
   static const heroFlightDuration = Duration(milliseconds: 1200);
 
-  /// Spring overshoot factor. Higher = more dramatic bounce past target.
-  /// 0.01 gives a very subtle ease-back without visible oscillation.
-  static const springExtraBounce = 0.01;
-
   /// Number of half-flips during the heroine flight.
   /// 2 half-flips = 1 full rotation = 360°.
   static const flipHalfFlips = 1;
