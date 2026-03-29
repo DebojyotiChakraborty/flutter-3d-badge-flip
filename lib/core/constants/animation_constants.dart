@@ -3,15 +3,15 @@ import 'package:flutter/widgets.dart';
 /// Centralized animation configuration for badge heroine transitions.
 abstract class AnimationConstants {
   /// Total flight duration for the heroine spring animation.
-  static const heroFlightDuration = Duration(milliseconds: 800);
+  static const heroFlightDuration = Duration(milliseconds: 1200);
 
   /// Spring overshoot factor. Higher = more dramatic bounce past target.
-  /// 0.03 gives a subtle ~5° ease-back past 720° without visible oscillation.
-  static const springExtraBounce = 0.03;
+  /// 0.01 gives a very subtle ease-back without visible oscillation.
+  static const springExtraBounce = 0.01;
 
   /// Number of half-flips during the heroine flight.
-  /// 4 half-flips = 2 full rotations = 720°.
-  static const flipHalfFlips = 4;
+  /// 2 half-flips = 1 full rotation = 360°.
+  static const flipHalfFlips = 1;
 
   /// 3D perspective depth for the flip transform.
   /// Smaller = less dramatic, larger = more dramatic (can distort).
