@@ -7,17 +7,20 @@ import '../../../../core/constants/animation_constants.dart';
 import '../../../../core/theme/badge_colors.dart';
 import '../../../../core/utils/heroine_helpers.dart';
 import '../../models/badge_model.dart';
+import 'badge_3d_viewer.dart';
 import 'badge_progress_bar.dart';
 import 'badge_thumbnail.dart';
 
 /// A single grid cell in the badge grid.
 ///
-/// Displays a metallic thumbnail with the badge name below.
+/// Displays the actual 3D badge model rendered via flutter_scene.
 /// Earned badges are full-color with a subtle glow.
-/// Unearned badges are greyscale at 40% opacity with a progress bar.
+/// Unearned badges show a greyscale thumbnail with a progress bar.
 ///
-/// The thumbnail is wrapped in a [Heroine] widget for shared-element
-/// transitions to the detail screen.
+/// The 3D viewer is wrapped in a [Heroine] widget for shared-element
+/// transitions to the detail screen. Since flutter_scene renders on
+/// Flutter's canvas (not a WebView), the actual 3D model participates
+/// in the heroine flip transition.
 class BadgeGridTile extends StatefulWidget {
   const BadgeGridTile({
     super.key,
@@ -32,6 +35,7 @@ class BadgeGridTile extends StatefulWidget {
 
 class _BadgeGridTileState extends State<BadgeGridTile> {
   bool _pressed = false;
+  bool _modelLoaded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +56,7 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Badge thumbnail with heroine wrapper + optional glow
+            // Badge 3D model with heroine wrapper + optional glow
             Expanded(
               child: Center(
                 child: _buildBadgeImage(badge),
@@ -93,37 +97,71 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
   }
 
   Widget _buildBadgeImage(AwardBadge badge) {
-    // Subtle radial glow behind earned badges
-    Widget thumbnailWidget = BadgeThumbnail(
-      accentColor: badge.accentColor,
-      isEarned: badge.isEarned,
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileSize = constraints.maxWidth.clamp(0.0, constraints.maxHeight);
 
-    if (badge.isEarned) {
-      thumbnailWidget = Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: BadgeColors.glowFor(badge.accentColor),
-              blurRadius: 20,
-              spreadRadius: 5,
+        // Build the inner content: 3D model with thumbnail fallback
+        Widget content = SizedBox(
+          width: tileSize,
+          height: tileSize,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Static thumbnail (fallback while 3D loads, or for unearned)
+              AnimatedOpacity(
+                opacity: _modelLoaded ? 0.0 : 1.0,
+                duration: AnimationConstants.crossfadeDuration,
+                child: BadgeThumbnail(
+                  accentColor: badge.accentColor,
+                  isEarned: badge.isEarned,
+                  size: tileSize,
+                ),
+              ),
+              // Actual 3D badge model (rendered on canvas)
+              Badge3DViewer(
+                modelAssetPath: badge.modelAssetPath,
+                size: tileSize,
+                onModelLoaded: () {
+                  if (mounted) setState(() => _modelLoaded = true);
+                },
+                autoRotate: false,
+                enableTouch: false, // No touch controls in grid
+              ),
+            ],
+          ),
+        );
+
+        // Add glow behind earned badges
+        if (badge.isEarned) {
+          content = Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: BadgeColors.glowFor(badge.accentColor),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: thumbnailWidget,
-      );
-    }
+            child: content,
+          );
+        }
 
-    // Wrap in Heroine for shared-element transition.
-    // RepaintBoundary for grid rendering performance.
-    return RepaintBoundary(
-      child: Heroine(
-        tag: badge.heroTag,
-        motion: badgeMotion(),
-        flightShuttleBuilder: badgeShuttleBuilder,
-        child: thumbnailWidget,
-      ),
+        // Wrap in Heroine for shared-element transition.
+        // The 3D viewer is INSIDE the Heroine child — it will
+        // participate in the flip transition because flutter_scene
+        // renders on Flutter's canvas.
+        return RepaintBoundary(
+          child: Heroine(
+            tag: badge.heroTag,
+            motion: badgeMotion(),
+            flightShuttleBuilder: badgeShuttleBuilder,
+            child: content,
+          ),
+        );
+      },
     );
   }
 }

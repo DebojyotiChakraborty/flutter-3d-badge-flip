@@ -2,142 +2,234 @@
 
 ## READ FIRST
 
-Read `context.md` before writing any code. It contains the full technical context, the heroine package architecture analysis, the bounce gap explanation, the BouncyFlipShuttleBuilder design, and all data models. Do not deviate from the architecture unless you hit a concrete blocker — document the blocker and your alternative.
+Read `context.md` before writing any code. It contains the architecture, the flutter_scene rationale, the RotatingBadgeShuttleBuilder design, the fallback strategy, and all data models.
+
+**Key architectural principle**: The 3D badge model is a real `flutter_scene` 3D object the entire time — in the grid, during the hero transition, and in the detail view. We do NOT use flat thumbnails with `Matrix4.rotateY()`. The 3D geometry is visible at every angle during the flip.
 
 ---
 
-## Build Order
+## Pre-Build: flutter_scene Viability Check
 
-Each phase must compile and run before moving to the next. Build incrementally.
+Before scaffolding the app, verify that flutter_scene works in your environment.
+
+### Step 0.1: Switch to Flutter Master Channel
+
+```bash
+flutter channel master
+flutter upgrade
+flutter --version  # Verify Dart >= 3.7
+```
+
+### Step 0.2: Create a Throwaway Test Project
+
+```bash
+flutter create scene_test && cd scene_test
+flutter pub add flutter_scene
+```
+
+Follow the flutter_scene README setup:
+- Install CMake (required for native assets build).
+- Add a simple GLB file (download any free GLB from https://sketchfab.com or use a simple one).
+- Try to render it with a `SceneWidget`.
+- Verify it builds and renders on iOS simulator or Android device.
+
+### Step 0.3: Decision Point
+
+- **If flutter_scene works** → Proceed with the primary architecture below.
+- **If flutter_scene fails to build or render** → Read the "Fallback Strategy" section in `context.md`. Implement Fallback B (flat flip + flutter_3d_controller post-landing). Adapt the phases below accordingly. Document what failed and why.
+
+---
+
+## Build Order (Primary: flutter_scene)
+
+Each phase must compile and run before the next.
 
 ---
 
 ### Phase 0: Project Bootstrap
 
-1. Create a new Flutter project: `flutter create --org com.example --project-name fitness_badges fitness_badges`
-2. Add dependencies from `context.md` to `pubspec.yaml`. Run `flutter pub get`.
-3. Verify the project compiles and runs with the default counter app.
-4. Delete the default counter code. Create all directories from the folder structure in `context.md`.
-5. Set up `app.dart`:
-   - `ProviderScope` at the root.
+1. Create project: `flutter create --org com.example --project-name fitness_badges fitness_badges`
+2. **Ensure Flutter master channel** (required for flutter_scene).
+3. Install CMake if not present (flutter_scene uses Native Assets).
+4. Add all dependencies from `context.md` to `pubspec.yaml`. Run `flutter pub get`.
+5. Verify compilation with default counter app.
+6. Delete default code. Create folder structure from `context.md`.
+7. Set up `app.dart`:
+   - `ProviderScope` at root.
    - `MaterialApp.router` with `GoRouter`.
-   - **Register `HeroineController` in GoRouter's `observers`** — this is mandatory for heroine to work.
-   - Dark theme: `ThemeData.dark()` with `scaffoldBackgroundColor: Colors.black`.
-   - Two routes: `/` (grid) and `/badge/:id` (detail).
-   - The detail route should use `HeroinePageRoute` as its page builder for dismiss support.
+   - **`observers: [HeroineController()]`** — mandatory for Heroine transitions.
+   - Dark theme: `scaffoldBackgroundColor: Colors.black`.
+   - Two routes: `/` (grid), `/badge/:id` (detail using `HeroinePageRoute`).
 
-**Checkpoint**: App launches to a black screen. No crashes. `HeroineController` is registered.
+**Checkpoint**: Black screen app launches. No crashes.
 
 ---
 
-### Phase 1: Data Layer + Badge Grid (Static)
+### Phase 1: flutter_scene Hello World
 
-1. **`badge_model.dart`**: Implement the `Badge` class from `context.md`. Include a `heroTag` getter returning `'badge_hero_${id}'`.
+Before building the full app, prove the 3D pipeline works.
 
-2. **`sample_badges.dart`**: Create 7 sample badges matching the Apple Fitness awards from the reference screenshots:
-   - New Move Record (earned, 343 kcal, pink accent)
-   - Move Goal 200% (earned, orange accent)
-   - New Move Goal (earned, 120 kcal, silver accent)
-   - 100 Move Goals (unearned, 8/100 progress, green accent)
-   - Move Goal 300% (unearned, 1/360 kcal, orange accent)
-   - Move Goal 400% (unearned, 1/480 kcal, green accent)
-   - Longest Move Streak (unearned, 0/8 days, green accent)
+1. **Obtain a test GLB file**: Create or download a simple metallic disc/coin shape. Place in `assets/badges/glb/test_badge.glb`. Declare in `pubspec.yaml` assets.
 
-   Use placeholder `thumbnailAssetPath` and `glbAssetPath` values for now.
+2. **Study flutter_scene examples**: Read the source at https://github.com/bdero/flutter_scene/tree/master/example. Understand:
+   - How to load a Scene from a GLB asset.
+   - How to render with `SceneWidget` or a custom `SceneNode` render widget.
+   - How to set camera position.
+   - How to rotate the model/node programmatically.
+   - What the actual class names and method signatures are (the API in `context.md` is approximate — use the REAL API).
 
-3. **`badge_repository.dart`**: Returns the sample badges list. Wrap in a Riverpod provider.
+3. **Create a test screen** that:
+   - Loads the GLB scene asynchronously.
+   - Renders it centered on screen.
+   - Auto-rotates it around the Y axis using a `Ticker` or `AnimationController`.
+   - Shows the badge spinning continuously.
 
-4. **`badge_grid_viewmodel.dart`**: Riverpod providers:
-   - `badgeListProvider`: Returns all badges.
-   - `badgeByIdProvider(String id)`: Returns single badge by ID.
+4. **Verify**: You see a 3D metallic object spinning smoothly with proper lighting, reflections, and depth. If not, debug flutter_scene setup before proceeding.
 
-5. **`badge_grid_screen.dart`**: Grid UI.
-   - `GridView.builder` with `SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 3)`.
-   - 16px padding and spacing.
-   - Each cell is a `BadgeGridTile`.
-   - Black background, white title "Close Your Rings" at top with subtitle.
+**Checkpoint**: A 3D badge spins on screen at 60fps. You can see edge thickness at 90° and 270°.
 
-6. **`badge_grid_tile.dart`**: Single grid cell.
-   - Display a placeholder colored circle (badge accent color) since no thumbnails yet.
-   - Badge name and subtitle below the circle.
-   - Earned: full opacity. Unearned: 40% opacity + greyscale via `ColorFiltered`.
-   - **Wrap the image area in a `Heroine` widget** (NOT Flutter's `Hero`):
+---
+
+### Phase 2: Scene Cache + Data Layer
+
+1. **`badge_model.dart`**: Implement the `Badge` class from `context.md`. Include `heroTag` getter.
+
+2. **`sample_badges.dart`**: Create 7 sample badges matching Apple Fitness screenshots (see `context.md` for the list). Point `glbAssetPath` to real or placeholder GLB files.
+
+3. **`badge_repository.dart`**: Returns sample badges. Wrap in Riverpod provider.
+
+4. **`badge_scene_cache.dart`**: Riverpod `FutureProvider` that preloads all earned badge GLB files into a `Map<String, Scene>` on app start. This cache is the single source of truth for 3D scenes.
+
+   ```dart
+   @riverpod
+   Future<Map<String, Scene>> badgeSceneCache(Ref ref) async {
+     final badges = ref.read(badgeListProvider);
+     final cache = <String, Scene>{};
+     for (final badge in badges.where((b) => b.isEarned)) {
+       cache[badge.id] = await Scene.fromGlb(badge.glbAssetPath);
+       // ^ Use the REAL flutter_scene API to load. This is approximate.
+     }
+     return cache;
+   }
+   ```
+
+5. **`badge_scene_widget.dart`**: Reusable widget that renders a badge's 3D scene.
+   - Takes a `Scene` (from cache), a `camera` config, and an `interactive` flag.
+   - When `interactive: false` (grid): static front-facing camera, no touch response.
+   - When `interactive: true` (detail): touch-to-rotate via gesture detector updating camera position.
+   - Handles the case where the scene is null (unearned badge) by showing a grey placeholder.
+
+**Checkpoint**: All badge scenes preload on app start. `BadgeSceneWidget` renders a 3D badge from cache.
+
+---
+
+### Phase 3: Badge Grid
+
+1. **`badge_grid_viewmodel.dart`**: Riverpod providers for badge list and badge-by-id lookup.
+
+2. **`badge_grid_screen.dart`**:
+   - Shows loading shimmer while scene cache loads.
+   - Once loaded, displays `CustomScrollView` with:
+     - `SliverToBoxAdapter`: "Close Your Rings" title + subtitle.
+     - `SliverGrid`: 3 columns, 16px spacing, `BadgeGridTile` cells.
+
+3. **`badge_grid_tile.dart`**:
+   - Earned: `BadgeSceneWidget(interactive: false)` showing the 3D badge.
+   - Unearned: Greyscale placeholder with progress bar.
+   - Wrapped in `Heroine`:
      ```dart
      Heroine(
        tag: badge.heroTag,
-       // motion and flightShuttleBuilder will be added in Phase 3
-       child: CircleAvatar(...), // placeholder
+       motion: Motion.bouncySpring(
+         duration: const Duration(milliseconds: 800),
+         extraBounce: 0.15,
+       ),
+       // flightShuttleBuilder will be added in Phase 5
+       child: BadgeSceneWidget(
+         scene: sceneCache[badge.id],
+         interactive: false,
+       ),
      )
      ```
-   - `onTap`: Navigate to `/badge/${badge.id}` using `context.go(...)`.
-   - Show a small progress bar below unearned badges.
+   - `onTap`: `context.go('/badge/${badge.id}')`.
 
-**Checkpoint**: Grid of colored circles with labels. Tapping one navigates to detail page. Heroine performs a basic default spring transition (no flip yet). Back button returns with reverse spring.
+**Checkpoint**: Grid shows 3D rendered badges from fixed camera angles. Each badge is a real 3D object with metallic PBR materials. Tapping navigates with a default Heroine spring (no rotation yet).
 
 ---
 
-### Phase 2: Detail Screen (Static, No 3D Yet)
+### Phase 4: Detail Screen
 
-1. **`badge_detail_viewmodel.dart`**: Provider that takes badge ID and returns badge data + a `glbLoadedState` (starts false).
+1. **`badge_detail_viewmodel.dart`**: Provider for selected badge state.
 
 2. **`badge_detail_screen.dart`**:
-   - Receives badge ID from route params.
-   - Layout: Badge image centered in upper 60%, info below.
-   - **Wrap badge image in `Heroine` widget with same `tag` as grid tile**:
-     ```dart
-     Heroine(
-       tag: badge.heroTag,
-       child: CircleAvatar(...), // larger placeholder, ~250×250
-     )
-     ```
-   - Below: `BadgeInfoCard` with name, description, date earned.
-   - For unearned: `BadgeProgressBar` instead of date.
-   - Back button or swipe-to-go-back dismisses.
+   - Badge `Heroine` with `BadgeSceneWidget(interactive: true)` in upper 60%.
+   - `BadgeInfoCard` with name, description, date in lower 40%.
+   - For unearned: locked state with progress bar.
+   - Wrap Heroine in `DragDismissable(onDismiss: () => context.pop())`.
+   - Wrap info card in `ReactToHeroineDismiss` to fade on drag.
 
-3. **`badge_info_card.dart`**: Badge metadata display. White on dark, centered text.
+3. **`scene_camera_controller.dart`**: Touch-to-rotate logic.
+   - `GestureDetector` wrapping the `SceneWidget`.
+   - `onPanUpdate`: map dx to Y-axis rotation, dy to X-axis tilt.
+   - Optional: momentum / spring deceleration after pan ends.
 
-4. **`badge_progress_bar.dart`**: Linear progress indicator with label. Badge accent color.
+4. **`badge_info_card.dart`** + **`badge_progress_bar.dart`**: As before.
 
-**Checkpoint**: Tapping grid tile navigates to detail with default Heroine spring animation (position + scale spring, no flip). Detail shows larger circle + info. Back returns with reverse spring.
+**Checkpoint**: Tapping a grid badge navigates to detail with default Heroine spring. Detail shows interactive 3D badge you can rotate by dragging. Drag-dismiss returns to grid.
 
 ---
 
-### Phase 3: BouncyFlipShuttleBuilder — THE CORE FEATURE
+### Phase 5: RotatingBadgeShuttleBuilder — THE CORE
 
-This is the hardest and most critical phase. Read the "Bounce Gap" section in `context.md` thoroughly before starting.
+This is where the magic happens. The 3D model rotates in true 3D during the hero flight.
 
-#### Step 3.1: Study Heroine Source
+#### Step 5.1: Study Heroine Internals
 
-Before writing the custom builder, read the heroine package source code:
+Read the heroine source in pub cache (`~/.pub-cache/hosted/pub.dev/heroine-0.7.1/lib/src/`):
 
-1. Open `packages/heroine/lib/src/shuttle_builders/flip_shuttle_builder.dart` in the pub cache (`~/.pub-cache/hosted/pub.dev/heroine-0.7.1/`).
-2. Study how `FlipShuttleBuilder.buildHero()` calculates rotation from `valueFromTo`.
-3. Open `simple_shuttle_builder.dart` and study how `call()` maps `animation.value` through `curve.transform(t)` — this is the clamping point.
-4. Open `heroine_shuttle_builder.dart` for the base class API.
-5. Note how the `call()` method receives `fromHeroContext` and `toHeroContext` — understand how to extract the child widgets.
+1. **`heroine_shuttle_builder.dart`**: Base class API. Understand `call()` signature.
+2. **`simple_shuttle_builder.dart`**: How it maps animation.value → valueFromTo via curve. This is what we're BYPASSING.
+3. **`flip_shuttle_builder.dart`**: How it extracts fromHero/toHero children. Copy this pattern.
+4. **The heroine flight overlay**: Understand where the shuttle widget lives during flight (it's in an Overlay, not in the widget tree of either route). This matters for context-dependent lookups like Provider/Riverpod.
 
-#### Step 3.2: Implement BouncyFlipShuttleBuilder
+#### Step 5.2: Scene Access Strategy
 
-Create `lib/core/transitions/bouncy_flip_shuttle_builder.dart`.
+The shuttle builder runs in an Overlay, outside both routes' widget trees. This means `ref.read()` from Riverpod may not work directly. Options:
 
-The key difference from `FlipShuttleBuilder`: extend `HeroineShuttleBuilder` directly (NOT `SimpleShuttleBuilder`) and use `animation.value` raw, without clamping through `Curve.transform()`.
+**Option A**: Store the `Scene` reference directly on the shuttle builder (not const):
+```dart
+class RotatingBadgeShuttleBuilder extends HeroineShuttleBuilder {
+  final Scene scene;
+  // ...
+}
+```
+Create the builder dynamically when constructing the Heroine widget, passing in the scene from cache.
+
+**Option B**: Use a global/static scene cache that doesn't need Riverpod context:
+```dart
+class BadgeSceneCache {
+  static final Map<String, Scene> _cache = {};
+  static Scene? get(String badgeId) => _cache[badgeId];
+  // populated during app init
+}
+```
+
+**Option C**: Extract the `BadgeSceneWidget` from the Heroine's child in `fromHeroContext` / `toHeroContext` and get the scene from it.
+
+Choose whichever works with heroine's architecture. Option A is simplest.
+
+#### Step 5.3: Implement RotatingBadgeShuttleBuilder
 
 ```dart
-import 'dart:math';
-import 'package:flutter/widgets.dart';
-import 'package:heroine/heroine.dart';
-
-class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
-  final Axis axis;
+class RotatingBadgeShuttleBuilder extends HeroineShuttleBuilder {
+  final Scene scene;
   final int halfFlips;
   final bool flipForward;
-  final double perspective;
 
-  const BouncyFlipShuttleBuilder({
-    this.axis = Axis.vertical,
-    this.halfFlips = 4,
+  RotatingBadgeShuttleBuilder({
+    required this.scene,
+    this.halfFlips = 4,       // 2 full rotations
     this.flipForward = true,
-    this.perspective = 0.001,
     super.curve,
   });
 
@@ -149,294 +241,137 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
     BuildContext fromHeroContext,
     BuildContext toHeroContext,
   ) {
-    // CRITICAL: Use animation.value DIRECTLY
-    // Do NOT map through curve.transform() — that clamps to [0,1] and kills the bounce
-    // The Motion.bouncySpring() on the Heroine drives this value past 1.0 during overshoot
-    // e.g., with extraBounce: 0.15, it might reach ~1.1 before settling to 1.0
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        // RAW value — DO NOT clamp. Spring overshoot creates the bounce.
+        final rawValue = animation.value;
+        final angle = rawValue * halfFlips * pi;
+        final dirSign = (flipForward ? 1.0 : -1.0) *
+            (flightDirection == HeroFlightDirection.pop ? -1.0 : 1.0);
 
-    // --- STUDY THE HEROINE SOURCE to determine:
-    // 1. How to correctly extract fromHero/toHero child widgets
-    // 2. Whether AnimatedBuilder is needed or if call() is already invoked per frame
-    // 3. How FlipShuttleBuilder handles the from/to crossfade (if any)
-    // --- Then implement accordingly. The code below is the rotation logic:
+        // Rotate the 3D model — use the REAL flutter_scene API
+        scene.rootNode.localTransform = Matrix4.rotationY(angle * dirSign);
 
-    final rawValue = animation.value;
-    final angle = rawValue * halfFlips * pi;
-
-    final dirSign = (flipForward ? 1.0 : -1.0) *
-        (flightDirection == HeroFlightDirection.pop ? -1.0 : 1.0);
-
-    // TODO: Extract child correctly (see heroine source for pattern)
-    // TODO: Handle from/to widget crossfade if children differ
-
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..setEntry(3, 2, perspective)
-        ..rotateY(axis == Axis.vertical ? angle * dirSign : 0)
-        ..rotateX(axis == Axis.horizontal ? angle * dirSign : 0),
-      child: /* resolved child */,
+        return SceneWidget(
+          scene: scene,
+          camera: PerspectiveCamera(
+            position: Vector3(0, 0, 5),
+            target: Vector3.zero(),
+          ),
+        );
+      },
     );
   }
 
   @override
-  List<Object?> get props => [axis, halfFlips, flipForward, perspective, curve];
+  List<Object?> get props => [scene, halfFlips, flipForward, curve];
 }
 ```
 
-**IMPORTANT**: The `TODO` comments are real — you MUST study the heroine source to fill these in. Do not guess. The child extraction pattern may involve `context.widget`, element tree walking, or a dedicated API. Get this wrong and you'll get blank frames during flight.
+**THIS IS A SKETCH.** You MUST:
+1. Replace approximate flutter_scene API calls with real ones.
+2. Handle scene node rotation vs camera rotation (study examples to determine which gives better visual results).
+3. Test that `SceneWidget` renders correctly inside the Heroine overlay.
+4. Handle the scene lifecycle — ensure the scene isn't disposed or corrupted during flight.
 
-#### Step 3.3: Possible Alternative — Subclass SimpleShuttleBuilder with Override
+#### Step 5.4: Wire Up the Shuttle Builder
 
-If extending `HeroineShuttleBuilder` directly proves too complex (too much internals to reimplement), try an alternative: extend `SimpleShuttleBuilder` but **override `call()`** to bypass the clamping:
-
-```dart
-class BouncyFlipShuttleBuilder extends SimpleShuttleBuilder {
-  // ...
-
-  @override
-  Widget call(
-    BuildContext flightContext,
-    Animation<double> animation,
-    HeroFlightDirection flightDirection,
-    BuildContext fromHeroContext,
-    BuildContext toHeroContext,
-  ) {
-    // Call buildHero with the RAW unclamped value instead of curve.transform(value)
-    final rawValue = animation.value;
-
-    // Manually extract fromHero and toHero the same way SimpleShuttleBuilder does
-    final fromHero = fromHeroContext.widget as Heroine;
-    final toHero = toHeroContext.widget as Heroine;
-
-    return buildHero(
-      flightContext: flightContext,
-      fromHero: fromHero.child,
-      toHero: toHero.child,
-      valueFromTo: rawValue,  // UNCLAMPED — this is the key change
-      flightDirection: flightDirection,
-    );
-  }
-
-  @override
-  Widget buildHero({
-    required BuildContext flightContext,
-    required Widget fromHero,
-    required Widget toHero,
-    required double valueFromTo,  // Now receives unclamped spring value
-    required HeroFlightDirection flightDirection,
-  }) {
-    final angle = valueFromTo * halfFlips * pi;
-    // ... rotation transform ...
-  }
-}
-```
-
-This is cleaner because `buildHero()` gets the from/to child widgets pre-resolved by the parent. But verify `SimpleShuttleBuilder.call()` actually passes `fromHeroine.child` — check the source.
-
-#### Step 3.4: Apply the Builder
-
-Update both `Heroine` widgets (grid tile + detail screen):
+Update both grid tile and detail screen Heroine widgets:
 
 ```dart
+// In BadgeGridTile
+final scene = sceneCache[badge.id]!;
 Heroine(
   tag: badge.heroTag,
   motion: Motion.bouncySpring(
     duration: const Duration(milliseconds: 800),
     extraBounce: 0.15,
   ),
-  flightShuttleBuilder: const BouncyFlipShuttleBuilder(
-    axis: Axis.vertical,
+  flightShuttleBuilder: RotatingBadgeShuttleBuilder(
+    scene: scene,
     halfFlips: 4,
     flipForward: true,
   ),
-  child: badgeWidget,
+  child: BadgeSceneWidget(scene: scene, interactive: false),
 )
 ```
 
-#### Step 3.5: Create animation_constants.dart
+Same config on detail screen Heroine.
 
-```dart
-abstract class AnimationConstants {
-  static const heroFlightDuration = Duration(milliseconds: 800);
-  static const springExtraBounce = 0.15;
-  static const flipHalfFlips = 4;
-  static const flipPerspective = 0.001;
-}
-```
+#### Step 5.5: Tune the Spring
 
-#### Step 3.6: Create heroine_helpers.dart
+Run the app and adjust:
 
-Factory for consistent Heroine configuration:
+| Parameter      | Start | Range     | Effect                            |
+| -------------- | ----- | --------- | --------------------------------- |
+| `extraBounce`  | 0.15  | 0.05–0.3  | Rotation overshoot amount         |
+| `duration`     | 800ms | 600–1200  | Flight duration                   |
+| `halfFlips`    | 4     | 2–6       | Rotation count                    |
 
-```dart
-import 'package:heroine/heroine.dart';
-import '../constants/animation_constants.dart';
-import '../transitions/bouncy_flip_shuttle_builder.dart';
+The bounce should be visible as the badge rotating ~20° past 720° then springing back.
 
-Motion badgeMotion() => Motion.bouncySpring(
-  duration: AnimationConstants.heroFlightDuration,
-  extraBounce: AnimationConstants.springExtraBounce,
-);
-
-const badgeShuttleBuilder = BouncyFlipShuttleBuilder(
-  axis: Axis.vertical,
-  halfFlips: AnimationConstants.flipHalfFlips,
-  flipForward: true,
-  perspective: AnimationConstants.flipPerspective,
-);
-```
-
-Then in both grid tile and detail screen:
-```dart
-Heroine(
-  tag: badge.heroTag,
-  motion: badgeMotion(),
-  flightShuttleBuilder: badgeShuttleBuilder,
-  child: widget,
-)
-```
-
-#### Step 3.7: Tune the Spring
-
-Run the app and iterate on these values:
-
-| Parameter      | Start Value | Range to Test | Effect                                   |
-| -------------- | ----------- | ------------- | ---------------------------------------- |
-| `extraBounce`  | 0.15        | 0.05 – 0.3   | More = bigger rotation overshoot         |
-| `duration`     | 800ms       | 600 – 1200ms  | Total flight time                        |
-| `halfFlips`    | 4           | 2 – 6         | Number of half-rotations                 |
-| `perspective`  | 0.001       | 0.0005–0.003  | 3D depth exaggeration                    |
-
-The bounce should feel natural — about 10-20° of overshoot past 720° then settle.
-
-**If `Motion.bouncySpring` overshoot is too symmetrical** (i.e., bounce at the start AND end): try `Motion.customSpring(SpringDescription(mass: 1, stiffness: 180, damping: 15))` and tune the damping ratio for an underdamped spring that only visibly overshoots at the end.
-
-**Checkpoint**: Tapping a badge triggers the full cinematic transition: fly + scale + 2× Y-axis flip + bounce settle on the rotation. Reverse on back. This should look impressive even with placeholder circles.
+**Checkpoint**: Tapping a grid badge triggers the full transition: the REAL 3D model flies from grid to detail, performing 2 full Y-axis rotations where you can see the badge's edge, back, and depth at every angle. The rotation bounces at the end. Reverse on back.
 
 ---
 
-### Phase 4: Real Thumbnails
+### Phase 6: Polish
 
-1. Create or obtain badge thumbnail images. Options:
-   - `CustomPainter` concentric circles/gradients matching Apple badge style.
-   - Real screenshots processed into PNGs.
-   - If GLBs are available, render thumbnails from them.
+1. **Grid tile press effect**: Scale-down 0.95× on press.
+2. **Badge glow**: Radial gradient shadow behind earned badges using accent color.
+3. **Detail info entrance**: Stagger-animate info card sliding up after Heroine lands.
+4. **Haptic feedback**: `HapticFeedback.mediumImpact()` on tap and bounce settle.
+5. **Locked badges**: Unearned badges use greyscale placeholder, transition shows lock overlay.
+6. **Scroll behavior**: `SliverAppBar` + `SliverGrid` for scrollable header.
+7. **Safe area**: Respect notch/home indicator.
+8. **Environment lighting**: Add an HDR environment map for realistic PBR reflections on the metallic badges.
 
-2. Place in `assets/badges/thumbnails/`, declare in `pubspec.yaml`.
-
-3. Update `sample_badges.dart` with real asset paths.
-
-4. Update `BadgeGridTile` to use `Image.asset()` with circular clip + optional glow shadow.
-
-5. Update `BadgeDetailScreen` heroine child to use same image (larger).
-
-**Checkpoint**: Grid shows realistic badge thumbnails. Heroine flips a real image.
-
----
-
-### Phase 5: 3D GLB Viewer in Detail
-
-1. Add GLB files to `assets/badges/glb/`. Simple metallic disc/sphere if real badges unavailable.
-
-2. **`badge_3d_viewer.dart`**: Wrapper around `Flutter3DController`.
-   - Initialize controller in `initState`.
-   - Front-facing camera position.
-   - Enable touch rotation (orbit controls).
-   - `onModelLoaded` callback.
-   - Dispose controller in `dispose`.
-
-3. **Integrate into detail screen** with crossfade pattern:
-   - Initially show the static thumbnail (this is what Heroine animates).
-   - After heroine transition completes, start loading GLB.
-   - When GLB loads, crossfade from thumbnail to live 3D viewer (300ms opacity).
-
-4. **State management**: `badge_detail_viewmodel` exposes `glbLoaded` state. `Badge3DViewer.onModelLoaded` updates it.
-
-**Checkpoint**: After flip-transition completes, static badge seamlessly morphs into interactive 3D model.
-
----
-
-### Phase 6: Polish & Micro-interactions
-
-1. **Grid tile press effect**: Subtle scale-down on press (0.95×) using `GestureDetector` + `AnimatedScale`.
-
-2. **Badge glow**: Radial gradient behind each earned badge using accent color at ~15% opacity.
-
-3. **Detail view entrance**: Stagger-animate info card sliding up from below (200ms delay, 400ms duration).
-
-4. **Haptic feedback**: `HapticFeedback.mediumImpact()` on badge tap.
-
-5. **DragDismissable**: Wrap the detail Heroine in `DragDismissable(onDismiss: () => context.pop())`. Add `ReactToHeroineDismiss` to fade out the info card during drag.
-
-6. **Locked badge tap**: Unearned badge still does heroine transition but shows lock icon + progress requirements (no 3D model).
-
-7. **Scroll behavior**: `CustomScrollView` + `SliverToBoxAdapter` (header) + `SliverGrid` (badges).
-
-8. **Safe area**: Respect notch and home indicator insets.
-
-**Checkpoint**: Polished, close to Apple Fitness reference.
+**Checkpoint**: App feels polished and close to Apple Fitness.
 
 ---
 
 ### Phase 7: Optional Enhancements
 
-Only after Phases 0-6 are stable.
-
-- **Gyroscope tilt**: `sensors_plus` for accelerometer → subtle 3D badge tilt (±15°).
-- **Category filtering**: Chips/tabs to filter by badge category.
-- **Badge unlock animation**: Particle/shine effect when badge transitions earned → unearned.
-- **Share sheet**: Long-press badge → share rendered image + text.
+- **Gyroscope tilt**: `sensors_plus` for accelerometer → subtle tilt on detail view badge.
+- **Category filtering**: Tabs/chips.
+- **Badge unlock animation**: Particle/shine effect.
+- **Share**: Long-press → snapshot → share sheet.
 
 ---
 
-## Key Gotchas & Debugging Tips
+## Key Gotchas
 
-### Heroine Issues
+### flutter_scene
+- **"Native Assets" build errors**: Ensure CMake is installed. On macOS: `brew install cmake`. On Linux: `apt-get install cmake`.
+- **Doesn't render**: Verify Impeller is enabled. On iOS/Android it's the default. On desktop, pass `--enable-impeller`.
+- **API mismatch**: The API in `context.md` is APPROXIMATE. Read the actual source/docs before implementing. Class names, method signatures, and widget names may differ.
+- **Multiple SceneWidgets in grid**: If frame rate drops, consider rendering only visible tiles. Use `SliverGrid` with `AutomaticKeepAlive`.
 
-- **No transition at all**: Did you register `HeroineController` in `GoRouter.observers`? This is the #1 cause.
-- **"No Heroine found" / silent failure**: Both source and destination must have `Heroine` widgets with the exact same `tag` string and both must be in the widget tree when transition starts.
-- **Clipping during rotation**: The 3D-rotated badge can get clipped by parent containers. Set `clipBehavior: Clip.none` on parent `Container`, `Card`, `SizedBox` etc.
-- **Black flash on push**: The detail page scaffold renders before Heroine arrives. Use `FadeTransition` for the page transition background, or ensure scaffold background is pure black.
-- **Double animation on iOS back swipe**: Heroine handles this automatically — it skips its animation when pop is triggered by a user gesture. No special handling needed.
-- **GoRouter compatibility**: `HeroinePageRoute` may or may not integrate cleanly with GoRouter's `pageBuilder`. If issues arise, use `CustomTransitionPage` with `FadeTransition` and let the Heroine handle the hero animation independently.
+### Heroine
+- **No transition**: `HeroineController` not in `GoRouter.observers`. This is the #1 cause.
+- **Blank shuttle during flight**: The shuttle builder's SceneWidget isn't rendering in the overlay. Try wrapping in `RepaintBoundary` or `Material(type: MaterialType.transparency)`.
+- **Scene corrupted after flight**: The same `Scene` instance is shared between grid tile, shuttle builder, and detail view. Ensure only one is actively modifying `rootNode.localTransform` at a time. Reset the transform when the flight completes.
+- **Clipping during rotation**: `clipBehavior: Clip.none` on parent widgets.
 
-### BouncyFlipShuttleBuilder Issues
-
-- **Blank frame during flight**: You're extracting the child widget incorrectly. Study heroine source to see how `SimpleShuttleBuilder.call()` resolves `fromHero`/`toHero`.
-- **Rotation not bouncing**: You're still clamping through `Curve.transform()`. Ensure you're reading `animation.value` directly.
-- **Rotation bounces too much**: Reduce `extraBounce` on `Motion.bouncySpring()`. Or switch to `Motion.snappySpring()`.
-- **Rotation direction wrong on pop**: Check the `directionSign` calculation — flip the sign for `HeroFlightDirection.pop`.
-- **Widget shows back-face at end**: With `halfFlips: 4` (even number), the widget should end in its original orientation. If it doesn't, check that your angle calculation uses `halfFlips * pi` (not `2 * pi`).
-
-### flutter_3d_controller
-
-- Uses platform views (WebView). Noticeable load time — always show thumbnail first.
-- Android emulator performance is poor. Test on real device.
-- Only one model viewer active at a time to avoid memory issues.
-- Alternative: `model_viewer_plus` has similar API.
-
-### Performance
-
-- Profile with `flutter run --profile`. Watch for jank during heroine transition.
-- Use `RepaintBoundary` around grid tiles.
-- Thumbnail images: ≤200×200 logical pixels for grid.
+### Scene Cache / Memory
+- **Loading time**: GLB loading is async. Show a shimmer grid until cache is populated.
+- **Memory pressure**: Each Scene holds GPU buffers. With 7+ badges, monitor memory. Dispose scenes for off-screen badges if needed.
+- **Scene mutation safety**: When the shuttle builder rotates the scene, the grid tile and detail view should NOT also be trying to render the same scene simultaneously. Heroine handles this via its placeholder mechanism (the source widget shows a placeholder during flight), but verify this.
 
 ## Testing Checklist
 
+- [ ] Flutter master channel, CMake installed, flutter_scene builds.
+- [ ] GLB loads and renders in flutter_scene with PBR materials.
+- [ ] Scene cache preloads all earned badge scenes.
+- [ ] Grid shows 3D badges (not flat images) from fixed camera angle.
 - [ ] `HeroineController` registered in GoRouter observers.
-- [ ] Grid displays all badges (earned = color, unearned = grey).
-- [ ] Tapping earned badge triggers Heroine + 2× Y-flip + bounce settle on rotation.
-- [ ] Rotation BOUNCES past 720° and springs back (not just position bounce).
-- [ ] Tapping unearned badge shows locked state with progress.
-- [ ] Back navigation plays reverse animation smoothly.
-- [ ] iOS back swipe does NOT double-animate.
-- [ ] 3D GLB viewer loads and is interactive in detail view.
-- [ ] Crossfade from thumbnail to 3D is seamless.
-- [ ] No memory leaks (3D controller disposed on pop).
-- [ ] Works on both iOS and Android real devices.
-- [ ] No clipping artifacts during rotation.
-- [ ] Info card stagger animation plays after Heroine lands.
-- [ ] DragDismissable works (drag badge down → dismiss + reverse fly).
-- [ ] Grid scrolls smoothly with 7+ badges.
+- [ ] Tapping badge triggers Heroine + true 3D Y-rotation (visible depth at 90°/270°).
+- [ ] Rotation bounces past 720° and springs back (not just position bounce).
+- [ ] Reverse animation on back/dismiss is smooth.
+- [ ] iOS back swipe doesn't double-animate (Heroine handles this).
+- [ ] Detail view allows touch-to-rotate the 3D badge.
+- [ ] DragDismissable works from detail view.
+- [ ] No scene corruption after multiple transitions.
+- [ ] Unearned badges show locked state.
+- [ ] 60fps on real iOS and Android devices during grid scroll AND transition.
 - [ ] Dark theme throughout, no white flashes.

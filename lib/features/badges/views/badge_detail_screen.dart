@@ -14,12 +14,11 @@ import 'widgets/badge_thumbnail.dart';
 /// Detail screen for a single badge.
 ///
 /// Layout: Badge image in upper 60%, info card in lower 40%.
-/// The badge thumbnail is wrapped in [Heroine] + [DragDismissable].
-/// After the heroine transition lands, the 3D GLB viewer loads and
-/// crossfades with the static thumbnail.
+/// The badge 3D viewer is wrapped in [Heroine] + [DragDismissable].
 ///
-/// IMPORTANT: The 3D viewer (WebView) is placed OUTSIDE the Heroine child.
-/// WebViews break when reparented into overlays during heroine flights.
+/// Because flutter_scene renders directly on Flutter's canvas (not a WebView),
+/// the 3D model CAN participate in heroine flights and Matrix4 transforms.
+/// This means the actual 3D badge flips during the shared-element transition.
 class BadgeDetailScreen extends ConsumerStatefulWidget {
   const BadgeDetailScreen({
     super.key,
@@ -38,7 +37,6 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
   late Animation<double> _infoCardOpacity;
   late Animation<Offset> _infoCardSlide;
   bool _glbLoaded = false;
-  bool _showGlbViewer = false;
 
   @override
   void initState() {
@@ -65,12 +63,7 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
     Future.delayed(
       AnimationConstants.heroFlightDuration + AnimationConstants.infoCardDelay,
       () {
-        if (mounted) {
-          _infoCardController.forward();
-          // Start loading the 3D viewer AFTER heroine transition completes.
-          // This prevents WebView from being reparented during flight.
-          setState(() => _showGlbViewer = true);
-        }
+        if (mounted) _infoCardController.forward();
       },
     );
   }
@@ -118,65 +111,60 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // Upper 60% — badge image area
+            // Upper 60% — badge 3D model
             Expanded(
               flex: 6,
               child: Center(
-                child: SizedBox(
-                  width: badgeSize,
-                  height: badgeSize,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Layer 1: Heroine with thumbnail (participates in flight)
-                      DragDismissable(
-                        child: Heroine(
-                          tag: badge.heroTag,
-                          motion: badgeMotion(),
-                          flightShuttleBuilder: badgeShuttleBuilder,
-                          child: Container(
-                            width: badgeSize,
-                            height: badgeSize,
-                            decoration: badge.isEarned
-                                ? BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: BadgeColors.glowFor(
-                                            badge.accentColor),
-                                        blurRadius: 40,
-                                        spreadRadius: 10,
-                                      ),
-                                    ],
-                                  )
-                                : null,
-                            child: BadgeThumbnail(
-                              accentColor: badge.accentColor,
-                              isEarned: badge.isEarned,
-                              size: badgeSize,
+                child: DragDismissable(
+                  child: Heroine(
+                    tag: badge.heroTag,
+                    motion: badgeMotion(),
+                    flightShuttleBuilder: badgeShuttleBuilder,
+                    // The 3D viewer is INSIDE the Heroine child.
+                    // flutter_scene renders on Flutter's canvas,
+                    // so Matrix4 transforms during flight work correctly.
+                    child: SizedBox(
+                      width: badgeSize,
+                      height: badgeSize,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Static thumbnail (fallback until 3D model loads)
+                          AnimatedOpacity(
+                            opacity: _glbLoaded ? 0.0 : 1.0,
+                            duration: AnimationConstants.crossfadeDuration,
+                            child: Container(
+                              decoration: badge.isEarned
+                                  ? BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: BadgeColors.glowFor(
+                                              badge.accentColor),
+                                          blurRadius: 40,
+                                          spreadRadius: 10,
+                                        ),
+                                      ],
+                                    )
+                                  : null,
+                              child: BadgeThumbnail(
+                                accentColor: badge.accentColor,
+                                isEarned: badge.isEarned,
+                                size: badgeSize,
+                              ),
                             ),
                           ),
-                        ),
+                          // Actual 3D model (canvas-based, participates in flip)
+                          Badge3DViewer(
+                            modelAssetPath: badge.modelAssetPath,
+                            size: badgeSize,
+                            onModelLoaded: _onGlbLoaded,
+                            autoRotate: badge.isEarned,
+                            enableTouch: badge.isEarned,
+                          ),
+                        ],
                       ),
-
-                      // Layer 2: 3D GLB viewer OUTSIDE Heroine
-                      // Only instantiated after heroine flight completes
-                      // to prevent WebView from breaking during reparenting.
-                      if (_showGlbViewer && badge.isEarned)
-                        AnimatedOpacity(
-                          opacity: _glbLoaded ? 1.0 : 0.0,
-                          duration: AnimationConstants.crossfadeDuration,
-                          child: SizedBox(
-                            width: badgeSize,
-                            height: badgeSize,
-                            child: Badge3DViewer(
-                              glbAssetPath: badge.glbAssetPath,
-                              size: badgeSize,
-                              onModelLoaded: _onGlbLoaded,
-                            ),
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 ),
               ),

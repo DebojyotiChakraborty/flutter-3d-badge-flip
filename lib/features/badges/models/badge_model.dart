@@ -41,4 +41,8 @@ class AwardBadge {
   /// Unique hero tag for heroine transitions.
   /// Must match between grid tile and detail screen.
   String get heroTag => 'badge_hero_$id';
+
+  /// Path to the flutter_scene .model file (converted from GLB).
+  /// Used for canvas-based 3D rendering that supports Matrix4 transforms.
+  String get modelAssetPath => glbAssetPath.replaceAll('.glb', '.model');
 }
