@@ -59,15 +59,26 @@ class _Badge3DViewerState extends State<Badge3DViewer>
       final node = await Node.fromAsset(widget.modelAssetPath);
       if (!mounted) return;
 
+      _retuneModelMaterials(node);
+
       // Create the scene graph ONCE and add the node.
       final scene = Scene();
 
-      // Use the default environment map (Royal Esplanade) which provides
-      // colorful HDR lighting for proper PBR metallic colors.
-      // Lower the intensity so the landscape features aren't recognizable
-      // but the color variation still illuminates the badges correctly.
-      scene.environment.intensity = 0.6;
-      scene.environment.exposure = 1.8;
+      try {
+        // Use the custom studio map to avoid real-world scene reflections.
+        final studioEnv = await EnvironmentMap.fromAssets(
+          radianceImagePath: 'assets/env/studio_radiance.png',
+          irradianceImagePath: 'assets/env/studio_irradiance.png',
+        );
+        scene.environment.environmentMap = studioEnv;
+        scene.environment.intensity = 0.78;
+        scene.environment.exposure = 1.0;
+      } catch (e) {
+        // Keep badges visible even if custom env textures fail to load.
+        debugPrint('Failed to load studio env map, using default IBL: $e');
+        scene.environment.intensity = 0.65;
+        scene.environment.exposure = 1.15;
+      }
 
       scene.add(node);
 
@@ -80,6 +91,57 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     } catch (e) {
       debugPrint('Failed to load 3D model ${widget.modelAssetPath}: $e');
     }
+  }
+
+  void _retuneModelMaterials(Node root) {
+    void visit(Node node) {
+      final mesh = node.mesh;
+      if (mesh != null) {
+        for (final primitive in mesh.primitives) {
+          final material = primitive.material;
+          if (material is! PhysicallyBasedMaterial) {
+            continue;
+          }
+
+          // The imported models currently rely on baseColorFactor values.
+          // Boosting saturation/value keeps colors visible without textures.
+          if (material.baseColorTexture == null) {
+            material.baseColorFactor = _boostBaseColor(material.baseColorFactor);
+          }
+
+          material.metallicFactor = material.metallicFactor.clamp(0.55, 0.9);
+          material.roughnessFactor = material.roughnessFactor.clamp(0.2, 0.72);
+        }
+      }
+
+      for (final child in node.children) {
+        visit(child);
+      }
+    }
+
+    visit(root);
+  }
+
+  vm.Vector4 _boostBaseColor(vm.Vector4 linearColor) {
+    final color = Color.fromRGBO(
+      (linearColor.x.clamp(0.0, 1.0) * 255).round(),
+      (linearColor.y.clamp(0.0, 1.0) * 255).round(),
+      (linearColor.z.clamp(0.0, 1.0) * 255).round(),
+      linearColor.w.clamp(0.0, 1.0),
+    );
+
+    final hsv = HSVColor.fromColor(color);
+    final boosted = hsv
+        .withSaturation((hsv.saturation * 1.6).clamp(0.45, 1.0))
+        .withValue((hsv.value * 1.45).clamp(0.32, 1.0));
+
+    final out = boosted.toColor();
+    return vm.Vector4(
+      out.r.clamp(0.0, 1.0),
+      out.g.clamp(0.0, 1.0),
+      out.b.clamp(0.0, 1.0),
+      linearColor.w,
+    );
   }
 
   void _onTick(Duration elapsed) {
