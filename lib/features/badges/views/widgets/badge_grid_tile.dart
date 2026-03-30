@@ -20,10 +20,7 @@ import 'badge_thumbnail.dart';
 /// Flutter's canvas (not a WebView), the actual 3D model participates
 /// in the heroine flip transition.
 class BadgeGridTile extends StatefulWidget {
-  const BadgeGridTile({
-    super.key,
-    required this.badge,
-  });
+  const BadgeGridTile({super.key, required this.badge});
 
   final AwardBadge badge;
 
@@ -55,20 +52,16 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Badge 3D model with heroine wrapper + optional glow
-            Expanded(
-              child: Center(
-                child: _buildBadgeImage(badge),
-              ),
-            ),
+            Expanded(child: Center(child: _buildBadgeImage(badge))),
             const SizedBox(height: 6),
 
             // Badge name
             Text(
               badge.name,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 11,
-                  ),
+                color: Colors.white.withValues(alpha: 0.9),
+                fontSize: 11,
+              ),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

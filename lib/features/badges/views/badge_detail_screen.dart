@@ -19,10 +19,7 @@ import 'widgets/badge_thumbnail.dart';
 /// the 3D model CAN participate in heroine flights and Matrix4 transforms.
 /// This means the actual 3D badge flips during the shared-element transition.
 class BadgeDetailScreen extends ConsumerStatefulWidget {
-  const BadgeDetailScreen({
-    super.key,
-    required this.badgeId,
-  });
+  const BadgeDetailScreen({super.key, required this.badgeId});
 
   final String badgeId;
 
@@ -50,13 +47,13 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
       parent: _infoCardController,
       curve: AnimationConstants.infoCardCurve,
     );
-    _infoCardSlide = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _infoCardController,
-      curve: AnimationConstants.infoCardCurve,
-    ));
+    _infoCardSlide =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _infoCardController,
+            curve: AnimationConstants.infoCardCurve,
+          ),
+        );
 
     // Delay the info card entrance to let the heroine transition land first.
     Future.delayed(

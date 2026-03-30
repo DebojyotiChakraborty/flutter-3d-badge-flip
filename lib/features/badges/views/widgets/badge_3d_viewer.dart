@@ -1,6 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_scene/scene.dart';
+import 'package:flutter_scene/scene.dart' hide Animation;
 import 'package:vector_math/vector_math.dart' as vm;
 
 /// A canvas-based 3D badge viewer using flutter_scene.
@@ -30,11 +32,13 @@ class Badge3DViewer extends StatefulWidget {
 }
 
 class _Badge3DViewerState extends State<Badge3DViewer>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   Scene? _scene;
   Node? _modelNode;
   bool _sceneReady = false;
   Ticker? _ticker;
+  late final AnimationController _snapController;
+  Animation<double>? _snapAnimation;
 
   // Touch rotation state (Y-axis only)
   double _rotationY = 0;
@@ -43,11 +47,51 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   @override
   void initState() {
     super.initState();
+    _snapController =
+        AnimationController(
+            vsync: this,
+            duration: const Duration(milliseconds: 260),
+          )
+          ..addListener(() {
+            final animation = _snapAnimation;
+            if (animation == null) {
+              return;
+            }
+            setState(() {
+              _rotationY = animation.value;
+            });
+          })
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) {
+              _snapAnimation = null;
+            }
+          });
+
     _initScene();
     // Create a ticker for continuous repaint when touch is enabled.
     if (widget.enableTouch) {
       _ticker = createTicker(_onTick)..start();
     }
+  }
+
+  void _snapToNearestProfile({double extraRotation = 0}) {
+    final projectedRotation = _rotationY + extraRotation;
+    final targetRotation =
+        (projectedRotation / math.pi).roundToDouble() * math.pi;
+
+    if ((targetRotation - _rotationY).abs() < 0.0001) {
+      return;
+    }
+
+    _snapController.stop();
+    _snapAnimation = Tween<double>(
+      begin: _rotationY,
+      end: targetRotation,
+    ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_snapController);
+
+    _snapController
+      ..value = 0
+      ..forward();
   }
 
   Future<void> _initScene() async {
@@ -106,7 +150,9 @@ class _Badge3DViewerState extends State<Badge3DViewer>
           // The imported models currently rely on baseColorFactor values.
           // Boosting saturation/value keeps colors visible without textures.
           if (material.baseColorTexture == null) {
-            material.baseColorFactor = _boostBaseColor(material.baseColorFactor);
+            material.baseColorFactor = _boostBaseColor(
+              material.baseColorFactor,
+            );
           }
 
           material.metallicFactor = material.metallicFactor.clamp(0.55, 0.9);
@@ -152,6 +198,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
 
   @override
   void dispose() {
+    _snapController.dispose();
     _ticker?.dispose();
     super.dispose();
   }
@@ -164,6 +211,8 @@ class _Badge3DViewerState extends State<Badge3DViewer>
       child: GestureDetector(
         onPanStart: widget.enableTouch
             ? (details) {
+                _snapController.stop();
+                _snapAnimation = null;
                 _lastPanX = details.localPosition.dx;
               }
             : null,
@@ -174,6 +223,20 @@ class _Badge3DViewerState extends State<Badge3DViewer>
                 setState(() {
                   _rotationY += dx * 0.01;
                 });
+              }
+            : null,
+        onPanEnd: widget.enableTouch
+            ? (details) {
+                // A small fling projection makes quick swipes feel natural
+                // before snapping to front/back profiles.
+                final projectedFlingRotation =
+                    details.velocity.pixelsPerSecond.dx * 0.0015;
+                _snapToNearestProfile(extraRotation: projectedFlingRotation);
+              }
+            : null,
+        onPanCancel: widget.enableTouch
+            ? () {
+                _snapToNearestProfile();
               }
             : null,
         child: _sceneReady
