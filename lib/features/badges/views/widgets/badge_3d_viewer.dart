@@ -5,6 +5,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_scene/scene.dart' hide Animation;
 import 'package:vector_math/vector_math.dart' as vm;
 
+import '../../../../core/transitions/flight_rotation.dart';
+
 /// A canvas-based 3D badge viewer using flutter_scene.
 ///
 /// Unlike WebView-based viewers (flutter_3d_controller), this renders directly
@@ -240,14 +242,20 @@ class _Badge3DViewerState extends State<Badge3DViewer>
               }
             : null,
         child: _sceneReady
-            ? ClipRect(
-                child: CustomPaint(
-                  painter: _ScenePainter(
-                    scene: _scene!,
-                    modelNode: _modelNode!,
-                    rotationY: _rotationY,
-                  ),
-                ),
+            ? Builder(
+                builder: (context) {
+                  final flight = FlightRotation.maybeOf(context);
+                  return ClipRect(
+                    child: CustomPaint(
+                      painter: _ScenePainter(
+                        scene: _scene!,
+                        modelNode: _modelNode!,
+                        rotationY: _rotationY,
+                        flightRotation: flight,
+                      ),
+                    ),
+                  );
+                },
               )
             : const SizedBox.shrink(),
       ),
@@ -259,17 +267,29 @@ class _ScenePainter extends CustomPainter {
   final Scene scene;
   final Node modelNode;
   final double rotationY;
+  final FlightRotation? flightRotation;
 
   _ScenePainter({
     required this.scene,
     required this.modelNode,
     required this.rotationY,
+    this.flightRotation,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Update the node's transform for Y-axis rotation only.
-    modelNode.localTransform = vm.Matrix4.identity()..rotateY(rotationY);
+    // Combine touch rotation with any in-flight heroine rotation.
+    final flight = flightRotation;
+    final transform = vm.Matrix4.identity();
+    if (flight != null) {
+      if (flight.axis == Axis.vertical) {
+        transform.rotateY(flight.angle);
+      } else {
+        transform.rotateX(flight.angle);
+      }
+    }
+    transform.rotateY(rotationY);
+    modelNode.localTransform = transform;
 
     // Camera positioned to frame the full badge model.
     // Badge models are ~40 units diameter with translations up to 54 units.

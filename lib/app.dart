@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:heroine/heroine.dart';
 
+import 'core/constants/animation_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'features/badges/views/badge_detail_screen.dart';
 import 'features/badges/views/badge_grid_screen.dart';
@@ -26,7 +27,7 @@ class _HeroineDetailPageRoute extends PageRoute<void>
   bool get maintainState => true;
 
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 400);
+  Duration get transitionDuration => AnimationConstants.heroFlightDuration;
 
   @override
   Widget buildPage(

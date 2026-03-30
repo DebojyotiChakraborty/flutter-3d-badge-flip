@@ -7,13 +7,12 @@ import '../../../../core/constants/animation_constants.dart';
 import '../../../../core/utils/heroine_helpers.dart';
 import '../../models/badge_model.dart';
 import 'badge_3d_viewer.dart';
-import 'badge_thumbnail.dart';
 
 /// A single grid cell in the badge grid.
 ///
 /// Displays the actual 3D badge model rendered via flutter_scene.
-/// Earned badges are full-color with a subtle glow.
-/// Unearned badges show a greyscale thumbnail with a progress bar.
+/// The heroine transition uses only the live 3D widget (no thumbnail fallback),
+/// so the same visual element scales and flips into the detail screen.
 ///
 /// The 3D viewer is wrapped in a [Heroine] widget for shared-element
 /// transitions to the detail screen. Since flutter_scene renders on
@@ -30,7 +29,6 @@ class BadgeGridTile extends StatefulWidget {
 
 class _BadgeGridTileState extends State<BadgeGridTile> {
   bool _pressed = false;
-  bool _modelLoaded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -77,32 +75,15 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
       builder: (context, constraints) {
         final tileSize = constraints.maxWidth.clamp(0.0, constraints.maxHeight);
 
-        // Build the inner content: 3D model with thumbnail fallback
+        // Build the inner content: actual 3D model only (no fallback)
         Widget content = SizedBox(
           width: tileSize,
           height: tileSize,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Static thumbnail (fallback while 3D loads)
-              AnimatedOpacity(
-                opacity: _modelLoaded ? 0.0 : 1.0,
-                duration: AnimationConstants.crossfadeDuration,
-                child: BadgeThumbnail(
-                  accentColor: badge.accentColor,
-                  size: tileSize,
-                ),
-              ),
-              // Actual 3D badge model (rendered on canvas)
-              Badge3DViewer(
-                modelAssetPath: badge.modelAssetPath,
-                size: tileSize,
-                onModelLoaded: () {
-                  if (mounted) setState(() => _modelLoaded = true);
-                },
-                enableTouch: false, // No touch controls in grid
-              ),
-            ],
+          child: Badge3DViewer(
+            modelAssetPath: badge.modelAssetPath,
+            size: tileSize,
+            onModelLoaded: () {},
+            enableTouch: false, // No touch controls in grid
           ),
         );
 

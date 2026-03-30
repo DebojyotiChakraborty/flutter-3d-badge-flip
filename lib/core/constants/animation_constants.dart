@@ -7,11 +7,11 @@ abstract class AnimationConstants {
 
   /// Number of half-flips during the heroine flight.
   /// 2 half-flips = 1 full rotation = 360°.
-  static const flipHalfFlips = 1;
+  static const flipHalfFlips = 2;
 
   /// 3D perspective depth for the flip transform.
   /// Smaller = less dramatic, larger = more dramatic (can distort).
-  static const flipPerspective = 0.001;
+  static const flipPerspective = 0.00001;
 
   /// Duration for the info card stagger entrance.
   static const infoCardDelay = Duration(milliseconds: 200);

@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/widgets.dart';
 import 'package:heroine/heroine.dart';
 
+import 'flight_rotation.dart';
+
 /// A custom shuttle builder that enables **bouncy rotation overshoot** during
 /// heroine flight transitions.
 ///
@@ -57,11 +59,18 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
   /// 0.001 is a good default.
   final double perspective;
 
+  /// Optional curve applied to the rotation progress independently of the
+  /// position/scale animation. Use [Curves.easeIn] to back-load the flip
+  /// so it finishes after position/scale have settled.
+  /// When null, rotation follows the same timing as position/scale.
+  final Curve? rotationCurve;
+
   const BouncyFlipShuttleBuilder({
     this.axis = Axis.vertical,
     this.halfFlips = 4,
     this.flipForward = true,
     this.perspective = 0.001,
+    this.rotationCurve,
     super.curve,
   });
 
@@ -77,7 +86,6 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
     // This avoids destination-side loading placeholders flashing mid-flight.
     // (e.g. detail view fallback thumbnail before 3D model is ready)
     final fromHero = fromHeroContext.widget;
-    final child = fromHero;
 
     // Direction sign: flip forward on push, reverse on pop.
     final directionSign =
@@ -102,24 +110,45 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
           rawValue = 1.0 - animation.value;
         }
 
-        // Rotation angle in radians.
-        // halfFlips * π * rawValue
-        // With halfFlips=4 and rawValue overshooting to 1.1:
-        //   4 * π * 1.1 = ~792° (72° overshoot past 720°)
-        final angle = rawValue * halfFlips * pi * directionSign;
+        // Apply an independent rotation curve if provided.
+        // This lets rotation lag behind position/scale (e.g. easeIn
+        // back-loads the flip so it finishes after the badge has
+        // moved and scaled into its destination).
+        double rotationProgress = rawValue;
+        if (rotationCurve != null) {
+          final clamped = rawValue.clamp(0.0, 1.0);
+          rotationProgress = rotationCurve!.transform(clamped);
+          // Preserve any overshoot beyond 1.0 for spring bounce.
+          if (rawValue > 1.0) {
+            rotationProgress += (rawValue - 1.0);
+          }
+        }
 
-        return Transform(
-          alignment: Alignment.center,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, perspective)
-            ..rotateY(axis == Axis.vertical ? angle : 0)
-            ..rotateX(axis == Axis.horizontal ? angle : 0),
-          child: child,
+        // Rotation angle in radians.
+        // halfFlips * π * rotationProgress
+        final angle = rotationProgress * halfFlips * pi * directionSign;
+
+        // Provide the rotation via InheritedWidget so the 3D viewer
+        // can apply it directly to the scene graph (model node).
+        // This ensures environment lighting and reflections update
+        // in real time, unlike a widget-level Transform which only
+        // rotates the already-rendered 2D output.
+        return FlightRotation(
+          angle: angle,
+          axis: axis,
+          child: SizedBox.expand(
+            child: FittedBox(
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              child: fromHero,
+            ),
+          ),
         );
       },
     );
   }
 
   @override
-  List<Object?> get props => [axis, halfFlips, flipForward, perspective, curve];
+  List<Object?> get props =>
+      [axis, halfFlips, flipForward, perspective, rotationCurve, curve];
 }

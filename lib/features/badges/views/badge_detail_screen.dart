@@ -8,7 +8,6 @@ import '../../../core/utils/heroine_helpers.dart';
 import '../viewmodels/badge_grid_viewmodel.dart';
 import 'widgets/badge_3d_viewer.dart';
 import 'widgets/badge_info_card.dart';
-import 'widgets/badge_thumbnail.dart';
 
 /// Detail screen for a single badge.
 ///
@@ -32,7 +31,6 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
   late AnimationController _infoCardController;
   late Animation<double> _infoCardOpacity;
   late Animation<Offset> _infoCardSlide;
-  bool _glbLoaded = false;
 
   @override
   void initState() {
@@ -68,12 +66,6 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
   void dispose() {
     _infoCardController.dispose();
     super.dispose();
-  }
-
-  void _onGlbLoaded() {
-    if (mounted) {
-      setState(() => _glbLoaded = true);
-    }
   }
 
   @override
@@ -122,26 +114,11 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
                     child: SizedBox(
                       width: badgeSize,
                       height: badgeSize,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Static thumbnail (fallback until 3D model loads)
-                          AnimatedOpacity(
-                            opacity: _glbLoaded ? 0.0 : 1.0,
-                            duration: AnimationConstants.crossfadeDuration,
-                            child: BadgeThumbnail(
-                              accentColor: badge.accentColor,
-                              size: badgeSize,
-                            ),
-                          ),
-                          // Actual 3D model (canvas-based, participates in flip)
-                          Badge3DViewer(
-                            modelAssetPath: badge.modelAssetPath,
-                            size: badgeSize,
-                            onModelLoaded: _onGlbLoaded,
-                            enableTouch: true,
-                          ),
-                        ],
+                      child: Badge3DViewer(
+                        modelAssetPath: badge.modelAssetPath,
+                        size: badgeSize,
+                        onModelLoaded: () {},
+                        enableTouch: true,
                       ),
                     ),
                   ),

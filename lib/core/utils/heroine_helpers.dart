@@ -8,10 +8,8 @@ import '../transitions/bouncy_flip_shuttle_builder.dart';
 ///
 /// Used by both the grid tile and detail screen to ensure
 /// matching Heroine configs (mismatched configs = broken transitions).
-Motion badgeMotion() => Motion.curved(
-      AnimationConstants.heroFlightDuration,
-      Curves.easeOut,
-    );
+Motion badgeMotion() =>
+    Motion.curved(AnimationConstants.heroFlightDuration, Curves.easeOut);
 
 /// Shared shuttle builder instance for all badge heroine transitions.
 final badgeShuttleBuilder = BouncyFlipShuttleBuilder(
