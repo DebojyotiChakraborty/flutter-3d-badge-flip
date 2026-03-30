@@ -73,24 +73,15 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
     BuildContext fromHeroContext,
     BuildContext toHeroContext,
   ) {
-    // Determine which child to show during flight.
-    // Pattern follows SimpleShuttleBuilder.call() — uses context.widget
-    // which gives us the Heroine widget (or its wrapped form).
+    // Use the source Heroine widget during flight for both push and pop.
+    // This avoids destination-side loading placeholders flashing mid-flight.
+    // (e.g. detail view fallback thumbnail before 3D model is ready)
     final fromHero = fromHeroContext.widget;
-    final toHero = toHeroContext.widget;
-
-    // For even halfFlips (2, 4, 6...) the widget ends facing forward.
-    // We show toHero for push, fromHero for pop, since the final orientation
-    // matches the original. No need for mid-flight crossfade with even flips.
-    final Widget child;
-    if (flightDirection == HeroFlightDirection.push) {
-      child = toHero;
-    } else {
-      child = fromHero;
-    }
+    final child = fromHero;
 
     // Direction sign: flip forward on push, reverse on pop.
-    final directionSign = (flipForward ? 1.0 : -1.0) *
+    final directionSign =
+        (flipForward ? 1.0 : -1.0) *
         (flightDirection == HeroFlightDirection.pop ? -1.0 : 1.0);
 
     return AnimatedBuilder(
