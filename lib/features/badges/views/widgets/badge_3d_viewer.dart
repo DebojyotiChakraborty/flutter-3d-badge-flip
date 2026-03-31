@@ -223,7 +223,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
                 final dx = details.localPosition.dx - _lastPanX;
                 _lastPanX = details.localPosition.dx;
                 setState(() {
-                  _rotationY -= dx * 0.01;
+                  _rotationY += dx * 0.01;
                 });
               }
             : null,
@@ -232,7 +232,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
                 // A small fling projection makes quick swipes feel natural
                 // before snapping to front/back profiles.
                 final projectedFlingRotation =
-                    details.velocity.pixelsPerSecond.dx * -0.0015;
+                    details.velocity.pixelsPerSecond.dx * 0.0015;
                 _snapToNearestProfile(extraRotation: projectedFlingRotation);
               }
             : null,
@@ -298,7 +298,13 @@ class _ScenePainter extends CustomPainter {
       target: vm.Vector3(0, 0, 0),
     );
 
+    // flutter_scene's current camera basis renders our badges mirrored on X.
+    // Apply a local canvas mirror correction so embossed text reads properly.
+    canvas.save();
+    canvas.translate(size.width, 0);
+    canvas.scale(-1, 1);
     scene.render(camera, canvas, viewport: Offset.zero & size);
+    canvas.restore();
   }
 
   @override
