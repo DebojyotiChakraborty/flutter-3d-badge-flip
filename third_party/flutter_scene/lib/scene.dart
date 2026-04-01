@@ -13,6 +13,7 @@ export 'src/asset_helpers.dart';
 export 'src/camera.dart';
 export 'src/math_extensions.dart';
 export 'src/mesh.dart';
+export 'src/glb_loader.dart';
 export 'src/node.dart';
 export 'src/scene_encoder.dart';
 export 'src/scene.dart';

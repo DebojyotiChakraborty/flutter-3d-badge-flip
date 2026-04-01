@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' hide Matrix4;
 import 'package:flutter_gpu/gpu.dart' as gpu;
 import 'package:flutter_scene/src/scene.dart';
 import 'package:flutter_scene/src/animation.dart';
+import 'package:flutter_scene/src/glb_loader.dart';
 import 'package:flutter_scene/src/asset_helpers.dart';
 import 'package:flutter_scene/src/geometry/geometry.dart';
 import 'package:flutter_scene/src/material/material.dart';
@@ -38,6 +39,8 @@ base class Node implements SceneGraph {
   Matrix4 localTransform = Matrix4.identity();
 
   Skin? _skin;
+
+  set skin(Skin? value) => _skin = value;
 
   set globalTransform(Matrix4 transform) {
     final parent = _parent;
@@ -129,6 +132,17 @@ base class Node implements SceneGraph {
   static Future<Node> fromAsset(String assetPath) async {
     final buffer = await rootBundle.load(assetPath);
     return fromFlatbuffer(buffer);
+  }
+
+  /// Load a 3D model directly from a GLB (glTF Binary) asset file,
+  /// without requiring offline conversion to the `.model` format.
+  ///
+  /// Example:
+  /// ```dart
+  /// final node = await Node.fromGlb('path/to/asset.glb');
+  /// ```
+  static Future<Node> fromGlb(String assetPath) async {
+    return GlbLoader.load(assetPath);
   }
 
   /// Deserialize a model from Flutter Scene's compact model format.

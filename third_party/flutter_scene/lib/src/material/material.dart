@@ -11,6 +11,8 @@ import 'package:flutter_scene_importer/flatbuffer.dart' as fb;
 abstract class Material {
   static gpu.Texture? _whitePlaceholderTexture;
 
+  bool doubleSided = false;
+
   static gpu.Texture getWhitePlaceholderTexture() {
     if (_whitePlaceholderTexture != null) {
       return _whitePlaceholderTexture!;
@@ -24,7 +26,7 @@ abstract class Material {
       throw Exception('Failed to create white placeholder texture.');
     }
     _whitePlaceholderTexture!.overwrite(
-      Uint32List.fromList(<int>[0xFFFF7F7F]).buffer.asByteData(),
+      Uint32List.fromList(<int>[0xFFFFFFFF]).buffer.asByteData(),
     );
     return _whitePlaceholderTexture!;
   }
@@ -130,7 +132,7 @@ abstract class Material {
     gpu.HostBuffer transientsBuffer,
     Environment environment,
   ) {
-    pass.setCullMode(gpu.CullMode.backFace);
+    pass.setCullMode(doubleSided ? gpu.CullMode.none : gpu.CullMode.backFace);
     pass.setWindingOrder(gpu.WindingOrder.counterClockwise);
   }
 

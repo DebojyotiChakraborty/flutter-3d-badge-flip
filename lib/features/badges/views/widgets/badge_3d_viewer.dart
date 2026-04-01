@@ -21,7 +21,7 @@ class Badge3DViewer extends StatefulWidget {
     this.enableTouch = false,
   });
 
-  /// Path to the .model file (converted from GLB via flutter_scene_importer).
+  /// Path to the GLB asset used for direct 3D rendering.
   final String modelAssetPath;
   final VoidCallback onModelLoaded;
   final double size;
@@ -102,10 +102,8 @@ class _Badge3DViewerState extends State<Badge3DViewer>
       await Scene.initializeStaticResources();
 
       // Load the 3D model
-      final node = await Node.fromAsset(widget.modelAssetPath);
+      final node = await Node.fromGlb(widget.modelAssetPath);
       if (!mounted) return;
-
-      _retuneModelMaterials(node);
 
       // Create the scene graph ONCE and add the node.
       final scene = Scene();
@@ -137,59 +135,6 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     } catch (e) {
       debugPrint('Failed to load 3D model ${widget.modelAssetPath}: $e');
     }
-  }
-
-  void _retuneModelMaterials(Node root) {
-    void visit(Node node) {
-      final mesh = node.mesh;
-      if (mesh != null) {
-        for (final primitive in mesh.primitives) {
-          final material = primitive.material;
-          if (material is! PhysicallyBasedMaterial) {
-            continue;
-          }
-
-          // The imported models currently rely on baseColorFactor values.
-          // Boosting saturation/value keeps colors visible without textures.
-          if (material.baseColorTexture == null) {
-            material.baseColorFactor = _boostBaseColor(
-              material.baseColorFactor,
-            );
-          }
-
-          material.metallicFactor = material.metallicFactor.clamp(0.55, 0.9);
-          material.roughnessFactor = material.roughnessFactor.clamp(0.2, 0.72);
-        }
-      }
-
-      for (final child in node.children) {
-        visit(child);
-      }
-    }
-
-    visit(root);
-  }
-
-  vm.Vector4 _boostBaseColor(vm.Vector4 linearColor) {
-    final color = Color.fromRGBO(
-      (linearColor.x.clamp(0.0, 1.0) * 255).round(),
-      (linearColor.y.clamp(0.0, 1.0) * 255).round(),
-      (linearColor.z.clamp(0.0, 1.0) * 255).round(),
-      linearColor.w.clamp(0.0, 1.0),
-    );
-
-    final hsv = HSVColor.fromColor(color);
-    final boosted = hsv
-        .withSaturation((hsv.saturation * 1.6).clamp(0.45, 1.0))
-        .withValue((hsv.value * 1.45).clamp(0.32, 1.0));
-
-    final out = boosted.toColor();
-    return vm.Vector4(
-      out.r.clamp(0.0, 1.0),
-      out.g.clamp(0.0, 1.0),
-      out.b.clamp(0.0, 1.0),
-      linearColor.w,
-    );
   }
 
   void _onTick(Duration elapsed) {
