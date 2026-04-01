@@ -13,7 +13,7 @@ abstract class AnimationConstants {
   static const flipHalfFlips = 2;
 
   /// Extra rotation after the badge reaches its face-forward pose.
-  static const flipOvershootRadians = 0.30;
+  static const flipOvershootRadians = 0.36;
 
   /// 3D perspective depth for the flip transform.
   /// Smaller = less dramatic, larger = more dramatic (can distort).

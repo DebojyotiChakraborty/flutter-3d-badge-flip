@@ -108,6 +108,8 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
         return FlightRotation(
           angle: angle,
           axis: axis,
+          progress: rotationProgress,
+          isPop: flightDirection == HeroFlightDirection.pop,
           child: SizedBox.expand(
             child: FittedBox(
               fit: BoxFit.contain,

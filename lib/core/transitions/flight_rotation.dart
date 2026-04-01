@@ -13,10 +13,18 @@ class FlightRotation extends InheritedWidget {
   /// Which axis the rotation is around.
   final Axis axis;
 
+  /// Normalized flight progress after the shuttle rotation curve is applied.
+  final double progress;
+
+  /// Whether this flight is returning to the source screen.
+  final bool isPop;
+
   const FlightRotation({
     super.key,
     required this.angle,
     required this.axis,
+    required this.progress,
+    required this.isPop,
     required super.child,
   });
 
@@ -27,5 +35,8 @@ class FlightRotation extends InheritedWidget {
 
   @override
   bool updateShouldNotify(FlightRotation oldWidget) =>
-      angle != oldWidget.angle || axis != oldWidget.axis;
+      angle != oldWidget.angle ||
+      axis != oldWidget.axis ||
+      progress != oldWidget.progress ||
+      isPop != oldWidget.isPop;
 }

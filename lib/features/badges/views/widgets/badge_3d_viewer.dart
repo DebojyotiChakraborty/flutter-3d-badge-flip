@@ -64,6 +64,8 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   Animation<double>? _snapAnimation;
   bool _initialSnapArmed = false;
   bool _initialSnapCompleted = false;
+  bool _popFlightActive = false;
+  double? _popFlightBaseRotationY;
 
   // Touch rotation state (Y-axis only)
   late double _rotationY;
@@ -197,6 +199,34 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     }
   }
 
+  void _syncFlightState(FlightRotation? flight) {
+    final isPopFlight = flight?.isPop ?? false;
+    if (isPopFlight && !_popFlightActive) {
+      _popFlightActive = true;
+      _popFlightBaseRotationY = _rotationY;
+      _initialSnapArmed = false;
+      _initialSnapCompleted = true;
+      _snapController.stop();
+      _snapAnimation = null;
+      return;
+    }
+
+    if (!isPopFlight && _popFlightActive) {
+      _popFlightActive = false;
+      _popFlightBaseRotationY = null;
+    }
+  }
+
+  double _effectiveRotationY(FlightRotation? flight) {
+    if (flight == null || !flight.isPop) {
+      return _rotationY;
+    }
+
+    final baseRotation = _popFlightBaseRotationY ?? _rotationY;
+    final remaining = (1.0 - flight.progress).clamp(0.0, 1.0);
+    return baseRotation * remaining;
+  }
+
   @override
   void dispose() {
     _snapController.dispose();
@@ -246,12 +276,13 @@ class _Badge3DViewerState extends State<Badge3DViewer>
             ? Builder(
                 builder: (context) {
                   final flight = FlightRotation.maybeOf(context);
+                  _syncFlightState(flight);
                   return ClipRect(
                     child: CustomPaint(
                       painter: _ScenePainter(
                         scene: _scene!,
                         modelNode: _modelNode!,
-                        rotationY: _rotationY,
+                        rotationY: _effectiveRotationY(flight),
                         flightRotation: flight,
                       ),
                     ),
