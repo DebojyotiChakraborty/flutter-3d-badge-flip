@@ -84,6 +84,7 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
             size: tileSize,
             onModelLoaded: () {},
             enableTouch: false, // No touch controls in grid
+            continuousRendering: true,
           ),
         );
 

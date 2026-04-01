@@ -23,6 +23,7 @@ class Badge3DViewer extends StatefulWidget {
     this.autoSnapToProfileOnLoad = false,
     this.initialSnapDelay = Duration.zero,
     this.initialSnapCurve = Curves.easeOutCubic,
+    this.continuousRendering = false,
   });
 
   /// Path to the GLB asset used for direct 3D rendering.
@@ -45,6 +46,9 @@ class Badge3DViewer extends StatefulWidget {
   /// Curve used by the initial snap animation.
   final Curve initialSnapCurve;
 
+  /// When true, keeps repainting the scene even without touch input.
+  final bool continuousRendering;
+
   @override
   State<Badge3DViewer> createState() => _Badge3DViewerState();
 }
@@ -55,6 +59,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   static const double _customEnvExposure = 1.85;
   static const double _fallbackEnvIntensity = 1.0;
   static const double _fallbackEnvExposure = 2.0;
+  static Future<EnvironmentMap>? _studioEnvironmentFuture;
 
   Scene? _scene;
   Node? _modelNode;
@@ -98,9 +103,16 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     _scheduleInitialSnap();
     _initScene();
     // Create a ticker for continuous repaint when touch is enabled.
-    if (widget.enableTouch) {
+    if (widget.enableTouch || widget.continuousRendering) {
       _ticker = createTicker(_onTick)..start();
     }
+  }
+
+  Future<EnvironmentMap> _loadSharedStudioEnvironment() {
+    return _studioEnvironmentFuture ??= EnvironmentMap.fromAssets(
+      radianceImagePath: 'assets/env/studio_radiance.png',
+      irradianceImagePath: 'assets/env/studio_irradiance.png',
+    );
   }
 
   void _scheduleInitialSnap() {
@@ -164,11 +176,9 @@ class _Badge3DViewerState extends State<Badge3DViewer>
       final scene = Scene();
 
       try {
-        // Use the custom studio map to avoid real-world scene reflections.
-        final studioEnv = await EnvironmentMap.fromAssets(
-          radianceImagePath: 'assets/env/studio_radiance.png',
-          irradianceImagePath: 'assets/env/studio_irradiance.png',
-        );
+        // Reuse one studio environment across viewers so the grid and detail
+        // badge scenes render with the same IBL setup.
+        final studioEnv = await _loadSharedStudioEnvironment();
         scene.environment.environmentMap = studioEnv;
         scene.environment.intensity = _customEnvIntensity;
         scene.environment.exposure = _customEnvExposure;
