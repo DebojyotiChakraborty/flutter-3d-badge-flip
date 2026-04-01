@@ -35,6 +35,11 @@ class Badge3DViewer extends StatefulWidget {
 
 class _Badge3DViewerState extends State<Badge3DViewer>
     with TickerProviderStateMixin {
+  static const double _customEnvIntensity = 1.18;
+  static const double _customEnvExposure = 1.85;
+  static const double _fallbackEnvIntensity = 1.0;
+  static const double _fallbackEnvExposure = 2.0;
+
   Scene? _scene;
   Node? _modelNode;
   bool _sceneReady = false;
@@ -115,13 +120,13 @@ class _Badge3DViewerState extends State<Badge3DViewer>
           irradianceImagePath: 'assets/env/studio_irradiance.png',
         );
         scene.environment.environmentMap = studioEnv;
-        scene.environment.intensity = 0.78;
-        scene.environment.exposure = 1.0;
+        scene.environment.intensity = _customEnvIntensity;
+        scene.environment.exposure = _customEnvExposure;
       } catch (e) {
         // Keep badges visible even if custom env textures fail to load.
         debugPrint('Failed to load studio env map, using default IBL: $e');
-        scene.environment.intensity = 0.65;
-        scene.environment.exposure = 1.15;
+        scene.environment.intensity = _fallbackEnvIntensity;
+        scene.environment.exposure = _fallbackEnvExposure;
       }
 
       scene.add(node);
