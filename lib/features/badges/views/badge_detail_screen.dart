@@ -119,6 +119,11 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
                         size: badgeSize,
                         onModelLoaded: () {},
                         enableTouch: true,
+                        initialRotationY:
+                            AnimationConstants.flipOvershootRadians,
+                        autoSnapToProfileOnLoad: true,
+                        initialSnapDelay: AnimationConstants.heroFlightDuration,
+                        initialSnapCurve: AnimationConstants.heroFlightCurve,
                       ),
                     ),
                   ),

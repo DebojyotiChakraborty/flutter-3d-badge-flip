@@ -2,12 +2,18 @@ import 'package:flutter/widgets.dart';
 
 /// Centralized animation configuration for badge heroine transitions.
 abstract class AnimationConstants {
-  /// Total flight duration for the heroine spring animation.
+  /// Total flight duration for the heroine badge animation.
   static const heroFlightDuration = Duration(milliseconds: 1200);
+
+  /// Shared easing for the badge flight and overshoot settle.
+  static const heroFlightCurve = Curves.easeOut;
 
   /// Number of half-flips during the heroine flight.
   /// 2 half-flips = 1 full rotation = 360°.
   static const flipHalfFlips = 2;
+
+  /// Extra rotation after the badge reaches its face-forward pose.
+  static const flipOvershootRadians = 0.30;
 
   /// 3D perspective depth for the flip transform.
   /// Smaller = less dramatic, larger = more dramatic (can distort).

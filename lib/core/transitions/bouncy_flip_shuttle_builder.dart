@@ -5,36 +5,24 @@ import 'package:heroine/heroine.dart';
 
 import 'flight_rotation.dart';
 
-/// A custom shuttle builder that enables **bouncy rotation overshoot** during
-/// heroine flight transitions.
+/// A custom shuttle builder that slightly over-rotates past the landing face
+/// during heroine flight transitions.
 ///
-/// ## Why this exists (The Bounce Gap)
-///
-/// The built-in [FlipShuttleBuilder] extends [SimpleShuttleBuilder], which
-/// maps `animation.value` through `Curve.transform(t)`. Flutter's curve
-/// transform **clamps t to [0.0, 1.0]**, which kills any spring overshoot
-/// on the rotation angle.
-///
-/// [Motion.bouncySpring] drives `animation.value` past 1.0 during overshoot
-/// (e.g., hitting ~1.1 before settling to 1.0). This overshoot makes
-/// position/scale bounce naturally. But the clamp in SimpleShuttleBuilder
-/// prevents rotation from bouncing.
-///
-/// This builder extends [HeroineShuttleBuilder] directly and uses the
-/// **raw unclamped animation.value**, allowing the rotation to overshoot
-/// past the target angle and spring back — matching the Apple Fitness
-/// badge flip feel.
+/// The settle-back can then happen in the destination badge layer so the
+/// landing doesn't pause and then re-accelerate inside the shuttle itself.
 ///
 /// ## Usage
 /// ```dart
 /// Heroine(
 ///   tag: 'badge_hero_1',
-///   motion: Motion.bouncySpring(
-///     duration: Duration(milliseconds: 800),
-///     extraBounce: 0.15,
+///   motion: Motion.curved(
+///     const Duration(milliseconds: 1200),
+///     Curves.easeOut,
 ///   ),
 ///   flightShuttleBuilder: const BouncyFlipShuttleBuilder(
-///     halfFlips: 4,  // 2 full rotations = 720°
+///     halfFlips: 2,
+///     rotationCurve: Curves.easeOut,
+///     landingOvershootRadians: 0.30,
 ///   ),
 ///   child: badgeWidget,
 /// )
@@ -59,20 +47,21 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
   /// 0.001 is a good default.
   final double perspective;
 
-  /// Optional curve applied to the rotation progress independently of the
-  /// position/scale animation. Use [Curves.easeIn] to back-load the flip
-  /// so it finishes after position/scale have settled.
-  /// When null, rotation follows the same timing as position/scale.
-  final Curve? rotationCurve;
+  /// Curve used for the main rotation.
+  final Curve rotationCurve;
+
+  /// Extra angle added after the badge reaches the face-forward pose.
+  final double landingOvershootRadians;
 
   const BouncyFlipShuttleBuilder({
     this.axis = Axis.vertical,
     this.halfFlips = 4,
     this.flipForward = true,
     this.perspective = 0.001,
-    this.rotationCurve,
-    super.curve,
-  });
+    this.rotationCurve = Curves.easeOut,
+    this.landingOvershootRadians = 0,
+    super.curve = Curves.linear,
+  }) : assert(landingOvershootRadians >= 0);
 
   @override
   Widget call(
@@ -95,14 +84,6 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, _) {
-        // CRITICAL: Use animation.value DIRECTLY.
-        // Do NOT map through curve.transform() — that clamps to [0,1]
-        // and kills the bounce overshoot from Motion.bouncySpring().
-        //
-        // For push: animation.value goes 0.0 → ~1.1 → 1.0 (with bounce)
-        // For pop: animation.value goes 1.0 → ~-0.1 → 0.0 (with bounce)
-        //
-        // We remap so the rotation always goes from 0 to target:
         final double rawValue;
         if (flightDirection == HeroFlightDirection.push) {
           rawValue = animation.value;
@@ -110,23 +91,14 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
           rawValue = 1.0 - animation.value;
         }
 
-        // Apply an independent rotation curve if provided.
-        // This lets rotation lag behind position/scale (e.g. easeIn
-        // back-loads the flip so it finishes after the badge has
-        // moved and scaled into its destination).
-        double rotationProgress = rawValue;
-        if (rotationCurve != null) {
-          final clamped = rawValue.clamp(0.0, 1.0);
-          rotationProgress = rotationCurve!.transform(clamped);
-          // Preserve any overshoot beyond 1.0 for spring bounce.
-          if (rawValue > 1.0) {
-            rotationProgress += (rawValue - 1.0);
-          }
-        }
-
-        // Rotation angle in radians.
-        // halfFlips * π * rotationProgress
-        final angle = rotationProgress * halfFlips * pi * directionSign;
+        final progress = rawValue.clamp(0.0, 1.0).toDouble();
+        final rotationProgress = rotationCurve.transform(progress);
+        final targetAngle =
+            (halfFlips * pi) +
+            (flightDirection == HeroFlightDirection.push
+                ? landingOvershootRadians
+                : 0.0);
+        final angle = rotationProgress * targetAngle * directionSign;
 
         // Provide the rotation via InheritedWidget so the 3D viewer
         // can apply it directly to the scene graph (model node).
@@ -149,6 +121,13 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
   }
 
   @override
-  List<Object?> get props =>
-      [axis, halfFlips, flipForward, perspective, rotationCurve, curve];
+  List<Object?> get props => [
+    axis,
+    halfFlips,
+    flipForward,
+    perspective,
+    rotationCurve,
+    landingOvershootRadians,
+    curve,
+  ];
 }

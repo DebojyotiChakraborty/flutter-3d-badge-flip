@@ -19,6 +19,10 @@ class Badge3DViewer extends StatefulWidget {
     required this.onModelLoaded,
     this.size = 250,
     this.enableTouch = false,
+    this.initialRotationY = 0,
+    this.autoSnapToProfileOnLoad = false,
+    this.initialSnapDelay = Duration.zero,
+    this.initialSnapCurve = Curves.easeOutCubic,
   });
 
   /// Path to the GLB asset used for direct 3D rendering.
@@ -28,6 +32,18 @@ class Badge3DViewer extends StatefulWidget {
 
   /// When true, the user can drag to rotate the badge along the Y axis.
   final bool enableTouch;
+
+  /// Starting Y rotation for the badge model.
+  final double initialRotationY;
+
+  /// When true, snap to the nearest front/back face after the optional delay.
+  final bool autoSnapToProfileOnLoad;
+
+  /// Delay before the initial snap begins.
+  final Duration initialSnapDelay;
+
+  /// Curve used by the initial snap animation.
+  final Curve initialSnapCurve;
 
   @override
   State<Badge3DViewer> createState() => _Badge3DViewerState();
@@ -46,14 +62,17 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   Ticker? _ticker;
   late final AnimationController _snapController;
   Animation<double>? _snapAnimation;
+  bool _initialSnapArmed = false;
+  bool _initialSnapCompleted = false;
 
   // Touch rotation state (Y-axis only)
-  double _rotationY = 0;
+  late double _rotationY;
   double _lastPanX = 0;
 
   @override
   void initState() {
     super.initState();
+    _rotationY = widget.initialRotationY;
     _snapController =
         AnimationController(
             vsync: this,
@@ -74,6 +93,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
             }
           });
 
+    _scheduleInitialSnap();
     _initScene();
     // Create a ticker for continuous repaint when touch is enabled.
     if (widget.enableTouch) {
@@ -81,7 +101,35 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     }
   }
 
-  void _snapToNearestProfile({double extraRotation = 0}) {
+  void _scheduleInitialSnap() {
+    if (!widget.autoSnapToProfileOnLoad ||
+        widget.initialRotationY.abs() < 0.0001) {
+      return;
+    }
+
+    Future.delayed(widget.initialSnapDelay, () {
+      if (!mounted || _initialSnapCompleted) {
+        return;
+      }
+
+      _initialSnapArmed = true;
+      _maybeStartInitialSnap();
+    });
+  }
+
+  void _maybeStartInitialSnap() {
+    if (!_sceneReady || !_initialSnapArmed || _initialSnapCompleted) {
+      return;
+    }
+
+    _initialSnapCompleted = true;
+    _snapToNearestProfile(curve: widget.initialSnapCurve);
+  }
+
+  void _snapToNearestProfile({
+    double extraRotation = 0,
+    Curve curve = Curves.easeOutCubic,
+  }) {
     final projectedRotation = _rotationY + extraRotation;
     final targetRotation =
         (projectedRotation / math.pi).roundToDouble() * math.pi;
@@ -94,7 +142,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     _snapAnimation = Tween<double>(
       begin: _rotationY,
       end: targetRotation,
-    ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_snapController);
+    ).chain(CurveTween(curve: curve)).animate(_snapController);
 
     _snapController
       ..value = 0
@@ -136,6 +184,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
         _modelNode = node;
         _sceneReady = true;
       });
+      _maybeStartInitialSnap();
       widget.onModelLoaded();
     } catch (e) {
       debugPrint('Failed to load 3D model ${widget.modelAssetPath}: $e');
@@ -163,6 +212,8 @@ class _Badge3DViewerState extends State<Badge3DViewer>
       child: GestureDetector(
         onPanStart: widget.enableTouch
             ? (details) {
+                _initialSnapArmed = false;
+                _initialSnapCompleted = true;
                 _snapController.stop();
                 _snapAnimation = null;
                 _lastPanX = details.localPosition.dx;
