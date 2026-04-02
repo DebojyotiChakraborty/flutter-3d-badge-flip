@@ -55,10 +55,12 @@ class Badge3DViewer extends StatefulWidget {
 
 class _Badge3DViewerState extends State<Badge3DViewer>
     with TickerProviderStateMixin {
-  static const double _customEnvIntensity = 1.18;
-  static const double _customEnvExposure = 1.85;
-  static const double _fallbackEnvIntensity = 1.0;
-  static const double _fallbackEnvExposure = 2.0;
+  // These badge meshes are heavily metallic, so they depend on the
+  // environment for most of their perceived brightness and specular pop.
+  static const double _customEnvIntensity = 1.3;
+  static const double _customEnvExposure = 2.0;
+  static const double _fallbackEnvIntensity = 1.08;
+  static const double _fallbackEnvExposure = 2.08;
   static Future<EnvironmentMap>? _studioEnvironmentFuture;
 
   Scene? _scene;

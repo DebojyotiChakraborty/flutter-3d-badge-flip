@@ -5,6 +5,7 @@
 ///   - studio_irradiance.png: soft diffuse fill (blurred/averaged version)
 ///
 /// Run with: dart run tool/generate_studio_env.dart
+// ignore_for_file: avoid_print
 library;
 
 import 'dart:io';
@@ -16,7 +17,11 @@ void main() {
   const radH = 256;
   const irrW = 64;
   const irrH = 32;
-  const baseAmbient = 12;
+  const baseAmbient = 18;
+
+  // The shader converts environment textures from sRGB back into linear space.
+  // Generate lighting in linear space first, then encode once at the end so
+  // metallic badges don't lose most of their midtone energy at runtime.
 
   // ---------------------------------------------------------------------------
   // 1. Radiance map — mostly black with two soft white area-light ellipses
@@ -55,7 +60,7 @@ void main() {
     centerV: 0.46,
     radiusU: 0.30,
     radiusV: 0.22,
-    intensity: 95,
+    intensity: 128,
     warmth: 0.01,
   );
 
@@ -66,7 +71,7 @@ void main() {
     centerV: 0.28,
     radiusU: 0.18,
     radiusV: 0.14,
-    intensity: 210,
+    intensity: 220,
     warmth: 0.03,
   );
 
@@ -77,7 +82,7 @@ void main() {
     centerV: 0.80,
     radiusU: 0.28,
     radiusV: 0.11,
-    intensity: 120,
+    intensity: 152,
     warmth: 0.02,
   );
 
@@ -88,35 +93,31 @@ void main() {
     centerV: 0.36,
     radiusU: 0.12,
     radiusV: 0.15,
-    intensity: 150,
+    intensity: 168,
     warmth: 0.0,
   );
 
   // Left side kicker.
   _drawSoftLight(
     radiance,
-    centerU: 0.26,
-    centerV: 0.40,
+    centerU: 0.30,
+    centerV: 0.43,
     radiusU: 0.11,
     radiusV: 0.14,
-    intensity: 135,
+    intensity: 130,
     warmth: -0.02,
   );
 
   // Top rim accent helps edge highlights during flips.
   _drawSoftLight(
     radiance,
-    centerU: 0.52,
+    centerU: 0.56,
     centerV: 0.08,
     radiusU: 0.14,
     radiusV: 0.08,
-    intensity: 120,
+    intensity: 126,
     warmth: -0.01,
   );
-
-  final radiancePng = img.encodePng(radiance);
-  File('assets/env/studio_radiance.png').writeAsBytesSync(radiancePng);
-  print('✓ assets/env/studio_radiance.png (${radW}x$radH)');
 
   // ---------------------------------------------------------------------------
   // 2. Irradiance map — heavily blurred / averaged version for diffuse lighting.
@@ -142,8 +143,8 @@ void main() {
   for (int y = 0; y < irrH; y++) {
     for (int x = 0; x < irrW; x++) {
       final p = blurred.getPixel(x, y);
-      const scale = 1.05;
-      const diffuseFloor = 18;
+      const scale = 1.18;
+      const diffuseFloor = 26;
       blurred.setPixelRgba(
         x,
         y,
@@ -155,6 +156,11 @@ void main() {
     }
   }
 
+  _encodeLinearImageToSrgb(blurred);
+  _encodeLinearImageToSrgb(radiance);
+  final radiancePng = img.encodePng(radiance);
+  File('assets/env/studio_radiance.png').writeAsBytesSync(radiancePng);
+  print('✓ assets/env/studio_radiance.png (${radW}x$radH)');
   final irradiancePng = img.encodePng(blurred);
   File('assets/env/studio_irradiance.png').writeAsBytesSync(irradiancePng);
   print('✓ assets/env/studio_irradiance.png (${irrW}x$irrH)');
@@ -164,6 +170,28 @@ void main() {
   print("    radiance: 'assets/env/studio_radiance.png',");
   print("    irradiance: 'assets/env/studio_irradiance.png',");
   print('  )');
+}
+
+void _encodeLinearImageToSrgb(img.Image image) {
+  for (int y = 0; y < image.height; y++) {
+    for (int x = 0; x < image.width; x++) {
+      final p = image.getPixel(x, y);
+      image.setPixelRgba(
+        x,
+        y,
+        _linearByteToSrgb(p.r.toDouble()),
+        _linearByteToSrgb(p.g.toDouble()),
+        _linearByteToSrgb(p.b.toDouble()),
+        p.a.toInt(),
+      );
+    }
+  }
+}
+
+int _linearByteToSrgb(double channel) {
+  final normalized = (channel / 255.0).clamp(0.0, 1.0);
+  final srgb = math.pow(normalized, 1 / 2.2).toDouble();
+  return (srgb * 255.0).round().clamp(0, 255);
 }
 
 /// Draws a soft elliptical light on an equirectangular map.

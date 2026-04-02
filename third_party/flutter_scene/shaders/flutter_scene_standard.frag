@@ -88,13 +88,11 @@ void main() {
                        .rgb) *
       frag_info.environment_intensity * kEnvironmentMultiplier;
 
-  // Hack to replace rough surfaces with irradiance because roughness LoDs are
-  // not being generated yet.
-  // TODO(bdero): Remove this hack once roughness LoDs are generated.
-  // float roughness_map = 1 / (1 + exp(-52.3 * (roughness - 0.786)));
-  // prefiltered_color = mix(prefiltered_color, irradiance, roughness_map);
-  prefiltered_color =
-      mix(irradiance, prefiltered_color, pow(1.02 - roughness, 12));
+  // Without roughness mip levels, very rough surfaces can look too sharp.
+  // But blending to irradiance too early wipes out the metallic shimmer that
+  // these badges rely on, so only fade to irradiance near the rough end.
+  float rough_reflection_mix = smoothstep(0.62, 0.97, roughness);
+  prefiltered_color = mix(prefiltered_color, irradiance, rough_reflection_mix);
 
   float brdf_x = mix(0.0, 0.99, n_dot_v);
   float brdf_y = mix(0.0, 0.99, roughness);

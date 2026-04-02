@@ -61,4 +61,15 @@ final List<AwardBadge> sampleBadges = [
     isEarned: true,
     dateEarned: DateTime(2026, 3, 1),
   ),
+  AwardBadge(
+    id: '6',
+    name: 'Perfect Move Week',
+    description:
+        'You closed your Move ring every day for an entire week. Consistency is the key to greatness!',
+    glbAssetPath: 'assets/badges/award-6.glb',
+    category: BadgeCategory.milestones,
+    accentColor: BadgeColors.blue,
+    isEarned: true,
+    dateEarned: DateTime(2026, 3, 20),
+  ),
 ];
