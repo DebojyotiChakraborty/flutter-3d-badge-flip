@@ -104,16 +104,18 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
               flex: 6,
               child: Center(
                 child: DragDismissable(
-                  child: Heroine(
-                    tag: badge.heroTag,
-                    motion: badgeMotion(),
-                    flightShuttleBuilder: badgeShuttleBuilder,
-                    // The 3D viewer is INSIDE the Heroine child.
-                    // flutter_scene renders on Flutter's canvas,
-                    // so Matrix4 transforms during flight work correctly.
-                    child: SizedBox(
-                      width: badgeSize,
-                      height: badgeSize,
+                  // The fixed size lives OUTSIDE the Heroine so the flight
+                  // shuttle can re-size the viewer to the flight rect and the
+                  // 3D scene renders at the flight's real resolution (no
+                  // pixelated upscaling). flutter_scene renders on Flutter's
+                  // canvas, so Matrix4 transforms during flight work correctly.
+                  child: SizedBox(
+                    width: badgeSize,
+                    height: badgeSize,
+                    child: Heroine(
+                      tag: badge.heroTag,
+                      motion: badgeMotion(),
+                      flightShuttleBuilder: badgeShuttleBuilder,
                       child: Badge3DViewer(
                         modelAssetPath: badge.modelAssetPath,
                         size: badgeSize,
@@ -124,6 +126,9 @@ class _BadgeDetailScreenState extends ConsumerState<BadgeDetailScreen>
                         autoSnapToProfileOnLoad: true,
                         initialSnapDelay: AnimationConstants.heroFlightDuration,
                         initialSnapCurve: AnimationConstants.heroFlightCurve,
+                        // Remember the flip pose so closing while showing the
+                        // back face continues the flip into the grid.
+                        rotationPersistKey: badge.heroTag,
                       ),
                     ),
                   ),

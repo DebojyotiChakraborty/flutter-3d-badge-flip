@@ -110,11 +110,15 @@ class BouncyFlipShuttleBuilder extends HeroineShuttleBuilder {
           axis: axis,
           progress: rotationProgress,
           isPop: flightDirection == HeroFlightDirection.pop,
+          // Lay the source badge out at the flight rect's real size (a centered
+          // square) instead of scaling it with a FittedBox. The badge is a
+          // flutter_scene render, so a FittedBox would upsample its low-res
+          // (grid-sized) render target and look pixelated mid-flight. Giving
+          // the viewer the actual flight size makes it rasterize the scene at
+          // display resolution every frame, staying crisp throughout.
           child: SizedBox.expand(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
-              child: fromHero,
+            child: Center(
+              child: AspectRatio(aspectRatio: 1.0, child: fromHero),
             ),
           ),
         );

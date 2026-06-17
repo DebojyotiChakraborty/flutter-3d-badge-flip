@@ -24,6 +24,7 @@ class Badge3DViewer extends StatefulWidget {
     this.initialSnapDelay = Duration.zero,
     this.initialSnapCurve = Curves.easeOutCubic,
     this.continuousRendering = false,
+    this.rotationPersistKey,
   });
 
   /// Path to the GLB asset used for direct 3D rendering.
@@ -49,6 +50,11 @@ class Badge3DViewer extends StatefulWidget {
   /// When true, keeps repainting the scene even without touch input.
   final bool continuousRendering;
 
+  /// When set, the viewer remembers its current Y rotation under this key so a
+  /// later heroine pop flight can continue the flip from wherever the user left
+  /// the badge (e.g. resting on its back face) instead of jumping to the front.
+  final String? rotationPersistKey;
+
   @override
   State<Badge3DViewer> createState() => _Badge3DViewerState();
 }
@@ -62,6 +68,11 @@ class _Badge3DViewerState extends State<Badge3DViewer>
   static const double _fallbackEnvIntensity = 1.08;
   static const double _fallbackEnvExposure = 2.08;
   static Future<EnvironmentMap>? _studioEnvironmentFuture;
+
+  /// Last Y rotation per [Badge3DViewer.rotationPersistKey]. A fresh viewer
+  /// built for a heroine pop flight reads this so closing a flipped (back-
+  /// facing) badge continues the flip instead of snapping to the front.
+  static final Map<String, double> _persistedRotations = {};
 
   Scene? _scene;
   Node? _modelNode;
@@ -93,7 +104,7 @@ class _Badge3DViewerState extends State<Badge3DViewer>
               return;
             }
             setState(() {
-              _rotationY = animation.value;
+              _applyRotation(animation.value);
             });
           })
           ..addStatusListener((status) {
@@ -211,11 +222,41 @@ class _Badge3DViewerState extends State<Badge3DViewer>
     }
   }
 
+  /// Sets the current Y rotation and, when a [Badge3DViewer.rotationPersistKey]
+  /// is configured, remembers it so a later pop flight can resume from it.
+  void _applyRotation(double value) {
+    _rotationY = value;
+    final key = widget.rotationPersistKey;
+    if (key != null) {
+      _persistedRotations[key] = value;
+    }
+  }
+
+  /// Reduces an angle to the equivalent rotation in (-2*pi, 0]. The pop flight
+  /// always turns the same (negative) way toward the front, so expressing the
+  /// resting pose in this range makes the settle-back depend only on the visible
+  /// face — not on which direction the user flipped. A back-facing badge always
+  /// settles with a consistent half turn (both +pi and -pi map to -pi); a
+  /// front-facing badge keeps its full turn. Mapping into (-pi, pi] instead would
+  /// make a left-flip (-pi -> +pi) fight the flight and spin 1.5x.
+  double _normalizeAngle(double radians) {
+    const twoPi = 2 * math.pi;
+    final wrapped = radians % twoPi; // Dart's % yields [0, twoPi)
+    return wrapped > 0 ? wrapped - twoPi : wrapped;
+  }
+
   void _syncFlightState(FlightRotation? flight) {
     final isPopFlight = flight?.isPop ?? false;
     if (isPopFlight && !_popFlightActive) {
       _popFlightActive = true;
-      _popFlightBaseRotationY = _rotationY;
+      // The shuttle builds a fresh viewer for the flight, so this instance's
+      // own _rotationY is just the initial pose. Resume from the rotation the
+      // interactive detail viewer last persisted (e.g. the back face) so a
+      // flipped badge continues its flip into the grid instead of jumping.
+      final key = widget.rotationPersistKey;
+      final restingRotation =
+          (key != null ? _persistedRotations[key] : null) ?? _rotationY;
+      _popFlightBaseRotationY = _normalizeAngle(restingRotation);
       _initialSnapArmed = false;
       _initialSnapCompleted = true;
       _snapController.stop();
@@ -248,61 +289,72 @@ class _Badge3DViewerState extends State<Badge3DViewer>
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: widget.size,
-      height: widget.size,
-      child: GestureDetector(
-        onPanStart: widget.enableTouch
-            ? (details) {
-                _initialSnapArmed = false;
-                _initialSnapCompleted = true;
-                _snapController.stop();
-                _snapAnimation = null;
-                _lastPanX = details.localPosition.dx;
-              }
-            : null,
-        onPanUpdate: widget.enableTouch
-            ? (details) {
-                final dx = details.localPosition.dx - _lastPanX;
-                _lastPanX = details.localPosition.dx;
-                setState(() {
-                  _rotationY += dx * 0.01;
-                });
-              }
-            : null,
-        onPanEnd: widget.enableTouch
-            ? (details) {
-                // A small fling projection makes quick swipes feel natural
-                // before snapping to front/back profiles.
-                final projectedFlingRotation =
-                    details.velocity.pixelsPerSecond.dx * 0.0015;
-                _snapToNearestProfile(extraRotation: projectedFlingRotation);
-              }
-            : null,
-        onPanCancel: widget.enableTouch
-            ? () {
-                _snapToNearestProfile();
-              }
-            : null,
-        child: _sceneReady
-            ? Builder(
-                builder: (context) {
-                  final flight = FlightRotation.maybeOf(context);
-                  _syncFlightState(flight);
-                  return ClipRect(
-                    child: CustomPaint(
-                      painter: _ScenePainter(
-                        scene: _scene!,
-                        modelNode: _modelNode!,
-                        rotationY: _effectiveRotationY(flight),
-                        flightRotation: flight,
-                      ),
+    final Widget viewer = GestureDetector(
+      onPanStart: widget.enableTouch
+          ? (details) {
+              _initialSnapArmed = false;
+              _initialSnapCompleted = true;
+              _snapController.stop();
+              _snapAnimation = null;
+              _lastPanX = details.localPosition.dx;
+            }
+          : null,
+      onPanUpdate: widget.enableTouch
+          ? (details) {
+              final dx = details.localPosition.dx - _lastPanX;
+              _lastPanX = details.localPosition.dx;
+              setState(() {
+                _applyRotation(_rotationY + dx * 0.01);
+              });
+            }
+          : null,
+      onPanEnd: widget.enableTouch
+          ? (details) {
+              // A small fling projection makes quick swipes feel natural
+              // before snapping to front/back profiles.
+              final projectedFlingRotation =
+                  details.velocity.pixelsPerSecond.dx * 0.0015;
+              _snapToNearestProfile(extraRotation: projectedFlingRotation);
+            }
+          : null,
+      onPanCancel: widget.enableTouch
+          ? () {
+              _snapToNearestProfile();
+            }
+          : null,
+      child: _sceneReady
+          ? Builder(
+              builder: (context) {
+                final flight = FlightRotation.maybeOf(context);
+                _syncFlightState(flight);
+                return ClipRect(
+                  child: CustomPaint(
+                    painter: _ScenePainter(
+                      scene: _scene!,
+                      modelNode: _modelNode!,
+                      rotationY: _effectiveRotationY(flight),
+                      flightRotation: flight,
+                      devicePixelRatio:
+                          MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0,
                     ),
-                  );
-                },
-              )
-            : const SizedBox.shrink(),
-      ),
+                  ),
+                );
+              },
+            )
+          : const SizedBox.shrink(),
+    );
+
+    // Render at the size we're actually given so the 3D scene rasterizes at
+    // display resolution. During a heroine flight the incoming constraints grow
+    // with the flight rect, keeping the badge crisp instead of being a small
+    // render that the shuttle scales up. Falls back to [widget.size] only when
+    // the incoming constraints are unbounded.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxSide = constraints.biggest.shortestSide;
+        final side = maxSide.isFinite ? maxSide : widget.size;
+        return SizedBox(width: side, height: side, child: viewer);
+      },
     );
   }
 }
@@ -313,10 +365,15 @@ class _ScenePainter extends CustomPainter {
   final double rotationY;
   final FlightRotation? flightRotation;
 
+  /// Logical→device pixel ratio of the surrounding view, used to oversample
+  /// the 3D render so the badge is rasterized at full device resolution.
+  final double devicePixelRatio;
+
   _ScenePainter({
     required this.scene,
     required this.modelNode,
     required this.rotationY,
+    required this.devicePixelRatio,
     this.flightRotation,
   });
 
@@ -342,12 +399,22 @@ class _ScenePainter extends CustomPainter {
       target: vm.Vector3(0, 0, 0),
     );
 
-    // flutter_scene's current camera basis renders our badges mirrored on X.
-    // Apply a local canvas mirror correction so embossed text reads properly.
+    // flutter_scene allocates its render-target texture at the viewport size in
+    // LOGICAL pixels and composites it 1:1 (see Surface.getNextRenderTarget),
+    // so on a 3x screen the badge would be rasterized at 1/3 resolution and
+    // upscaled — soft/pixelated in every state. Oversample by the device pixel
+    // ratio: work in device pixels (scale by 1/dpr) and render into a viewport
+    // of size*dpr, so the texture is created at full device resolution, then
+    // drawn 1:1.
+    final dev = size * devicePixelRatio;
     canvas.save();
-    canvas.translate(size.width, 0);
+    canvas.scale(1 / devicePixelRatio);
+    // flutter_scene's camera basis renders our badges mirrored on X; correct it
+    // so embossed text reads properly. Width is in device pixels here because of
+    // the 1/dpr scale above.
+    canvas.translate(dev.width, 0);
     canvas.scale(-1, 1);
-    scene.render(camera, canvas, viewport: Offset.zero & size);
+    scene.render(camera, canvas, viewport: Offset.zero & dev);
     canvas.restore();
   }
 

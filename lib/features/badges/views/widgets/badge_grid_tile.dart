@@ -53,16 +53,25 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
             Expanded(child: Center(child: _buildBadgeImage(badge))),
             const SizedBox(height: 6),
 
-            // Badge name
-            Text(
-              badge.name,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.9),
-                fontSize: 11,
+            // Badge name.
+            // Reserve a fixed two-line band so every tile's badge area is the
+            // same height — otherwise single- vs two-line labels would push the
+            // badges to different vertical positions within a row. The label is
+            // centered horizontally and truncated with an ellipsis past 2 lines.
+            SizedBox(
+              height: 30,
+              width: double.infinity,
+              child: Text(
+                badge.name,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 11,
+                  height: 1.2,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -75,29 +84,29 @@ class _BadgeGridTileState extends State<BadgeGridTile> {
       builder: (context, constraints) {
         final tileSize = constraints.maxWidth.clamp(0.0, constraints.maxHeight);
 
-        // Build the inner content: actual 3D model only (no fallback)
-        Widget content = SizedBox(
-          width: tileSize,
-          height: tileSize,
-          child: Badge3DViewer(
-            modelAssetPath: badge.modelAssetPath,
-            size: tileSize,
-            onModelLoaded: () {},
-            enableTouch: false, // No touch controls in grid
-            continuousRendering: true,
-          ),
-        );
-
-        // Wrap in Heroine for shared-element transition.
-        // The 3D viewer is INSIDE the Heroine child — it will
-        // participate in the flip transition because flutter_scene
-        // renders on Flutter's canvas.
+        // The fixed size lives OUTSIDE the Heroine so the flight shuttle can
+        // re-size the viewer to the (growing) flight rect. The 3D viewer then
+        // renders the scene at the flight's real resolution instead of being a
+        // small grid-sized render that gets scaled up — which looked pixelated.
+        //
+        // The 3D viewer participates in the flip transition because
+        // flutter_scene renders on Flutter's canvas.
         return RepaintBoundary(
-          child: Heroine(
-            tag: badge.heroTag,
-            motion: badgeMotion(),
-            flightShuttleBuilder: badgeShuttleBuilder,
-            child: content,
+          child: SizedBox(
+            width: tileSize,
+            height: tileSize,
+            child: Heroine(
+              tag: badge.heroTag,
+              motion: badgeMotion(),
+              flightShuttleBuilder: badgeShuttleBuilder,
+              child: Badge3DViewer(
+                modelAssetPath: badge.modelAssetPath,
+                size: tileSize,
+                onModelLoaded: () {},
+                enableTouch: false, // No touch controls in grid
+                continuousRendering: true,
+              ),
+            ),
           ),
         );
       },
